@@ -1,45 +1,74 @@
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
+using System.Collections.Generic;
 
 public class ExitZone : MonoBehaviour
 {
     public int requiredPlayers = 2;
+    public float nextLevelDelay = 1.5f;
 
-    readonly HashSet<PlayerController> inside = new HashSet<PlayerController>();
+    HashSet<Collider> inside = new HashSet<Collider>();
     bool done;
+    float timer;
     GUIStyle big, small;
 
-    void OnTriggerEnter(Collider other) { Add(other); }
-    void OnTriggerStay(Collider other) { Add(other); }
+    void Reset()
+    {
+        var c = GetComponent<Collider>();
+        if (c) c.isTrigger = true;
+    }
+
+    void Start()
+    {
+        var c = GetComponent<Collider>();
+        if (c) c.isTrigger = true;
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.GetComponentInParent<PlayerController>() != null)
+            inside.Add(other);
+    }
 
     void OnTriggerExit(Collider other)
     {
-        var p = other.GetComponentInParent<PlayerController>();
-        if (p != null) inside.Remove(p);
+        inside.Remove(other);
     }
 
-    void Add(Collider other)
+    int CountPlayers()
     {
-        var p = other.GetComponentInParent<PlayerController>();
-        if (p == null) return;
-        inside.Add(p);
-
-        if (!done && inside.Count >= requiredPlayers)
+        var set = new HashSet<PlayerController>();
+        foreach (var c in inside)
         {
-            done = true;
-            Time.timeScale = 0f;
-            Debug.Log("STAGE COMPLETE");
+            if (c == null) continue;
+            var p = c.GetComponentInParent<PlayerController>();
+            if (p != null) set.Add(p);
         }
+        return set.Count;
     }
 
     void Update()
     {
-        if (done && Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
+        if (done)
         {
-            Time.timeScale = 1f;
-            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            // Time.timeScale 0 nahi karte, taake timer chale
+            timer += Time.deltaTime;
+            if (timer >= nextLevelDelay)
+            {
+                if (LevelManager.Instance != null)
+                {
+                    if (LevelManager.Instance.IsLastLevel)
+                        LevelManager.Instance.NextLevel();   // shuru se
+                    else
+                        LevelManager.Instance.NextLevel();
+                }
+            }
+            return;
+        }
+
+        if (CountPlayers() >= requiredPlayers)
+        {
+            done = true;
+            timer = 0f;
         }
     }
 
@@ -48,25 +77,24 @@ public class ExitZone : MonoBehaviour
         if (big == null)
         {
             big = new GUIStyle(GUI.skin.label);
-            big.fontSize = 48;
+            big.fontSize = 56;
             big.alignment = TextAnchor.MiddleCenter;
             big.normal.textColor = Color.green;
-
             small = new GUIStyle(GUI.skin.label);
-            small.fontSize = 26;
-            small.alignment = TextAnchor.LowerCenter;
-            small.normal.textColor = Color.yellow;
+            small.fontSize = 24;
+            small.alignment = TextAnchor.UpperCenter;
+            small.normal.textColor = Color.white;
         }
 
-        if (done)
+        if (!done)
         {
-            GUI.Label(new Rect(0, 0, Screen.width, Screen.height),
-                      "STAGE 1 COMPLETE!\nPress R to Play Again", big);
+            GUI.Label(new Rect(0, 40, Screen.width, 40),
+                      "Exit: " + CountPlayers() + " / " + requiredPlayers + " players", small);
+            return;
         }
-        else if (inside.Count > 0)
-        {
-            GUI.Label(new Rect(0, 0, Screen.width, Screen.height - 30),
-                      "Exit: " + inside.Count + " / " + requiredPlayers + " players", small);
-        }
+
+        bool last = LevelManager.Instance != null && LevelManager.Instance.IsLastLevel;
+        string msg = last ? "SHIP REPAIRED!\nYOU WIN" : "LEVEL COMPLETE!";
+        GUI.Label(new Rect(0, 0, Screen.width, Screen.height), msg, big);
     }
 }

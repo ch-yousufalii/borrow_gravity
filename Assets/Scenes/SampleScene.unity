@@ -1270,6 +1270,7 @@ MonoBehaviour:
   levels:
   - {fileID: 9083349691901420440, guid: 60c73f94d5d2db047bb64a2c2314cbe7, type: 3}
   - {fileID: 5271457432463674273, guid: 44cc3e8f52f490047be5265a0da1c1dc, type: 3}
+  - {fileID: 5271457432463674273, guid: 393a1ef9a91394449a5437e44f29c94d, type: 3}
   player1: {fileID: 364177840}
   player2: {fileID: 843960840}
   startLevel: 0
