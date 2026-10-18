@@ -54,6 +54,7 @@ namespace BorrowGravity
             players = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
             foreach (var p in players) p.Respawned += _ => Deaths++;
             if (playAmbience) Sfx.SetLoop(LoopId.Ambience, true, 0.35f);
+            Sfx.SetLoop(LoopId.Music, true, 0.8f);
             if (GameFlow.ShowIntro && !string.IsNullOrEmpty(introText)) SetState(StageState.Intro);
             else SetState(StageState.Playing);
             GameUI.SetObjective(objective, objectiveText);
