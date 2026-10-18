@@ -150,7 +150,8 @@ namespace BorrowGravity
             if (NetSession.IsClient) return;
             if (ViewCamera != null) cam = ViewCamera;
             if (cam == null) cam = Camera.main;
-            if (!InputEnabled)
+            var stage = StageManager.Instance;
+            if (!InputEnabled || (stage != null && stage.isActiveAndEnabled && stage.MissionShowing))
             {
                 RawMove = Vector2.zero;
                 return;

@@ -60,9 +60,16 @@ namespace BorrowGravity
             GameUI.SetObjective(objective, objectiveText);
         }
 
+        /// <summary>The mission banner shows for a few seconds when a stage starts; nobody moves while it's up.</summary>
+        public const float MissionSeconds = 3f;
+        float missionUntil;
+        public bool MissionShowing => State == StageState.Playing && Time.unscaledTime < missionUntil;
+        public float MissionSecondsLeft => Mathf.Max(0f, missionUntil - Time.unscaledTime);
+
         void SetState(StageState s)
         {
             if (s == StageState.Intro) introShownAt = Time.unscaledTime;
+            if (s == StageState.Playing && (State == StageState.Intro || players == null || StageTime <= 0f)) missionUntil = Time.unscaledTime + MissionSeconds;
             State = s;
             bool playing = s == StageState.Playing;
             if (players != null) foreach (var p in players) if (p != null) p.InputEnabled = playing;
@@ -156,6 +163,7 @@ namespace BorrowGravity
         {
             if (state != State && state == StageState.Paused) PauseSelection = 0;
             if (state != State && state == StageState.Intro) introShownAt = Time.unscaledTime;
+            if (state != State && state == StageState.Playing && State == StageState.Intro) missionUntil = Time.unscaledTime + MissionSeconds;
             if (state != State && state == StageState.Complete) completeTime = Time.unscaledTime; // for the next-level countdown
             State = state;
             StageTime = stageTime;
@@ -183,12 +191,22 @@ namespace BorrowGravity
                 || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.NumpadEnter) || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.RightCtrl);
         }
 
-        public static readonly string[] PauseItems = { "Resume", "Restart from checkpoint", "Restart stage", "Settings", "Main menu" };
-        const int SettingsItem = 3;
+        public static readonly string[] PauseItems = { "Resume", "Restart from checkpoint", "Restart stage", "Settings", "Camera", "Main menu" };
+        const int SettingsItem = 3, CameraItem = 4;
+
+        /// <summary>What a pause item reads (the camera item shows the current view).</summary>
+        public static string PauseLabel(int i) =>
+            i == CameraItem ? (ControlSettings.View == CameraView.ThirdPerson ? "Camera · Third person" : "Camera · Side view") : PauseItems[i];
 
         public void ChoosePauseItem(int i)
         {
             if (i == SettingsItem) { GameUI.SettingsOpen = true; return; } // per device, never sent to the host
+            if (i == CameraItem)
+            {
+                ControlSettings.View = ControlSettings.View == CameraView.ThirdPerson ? CameraView.Side : CameraView.ThirdPerson;
+                Sfx.Play(SfxId.Tick, 0.7f, 1.2f);
+                return;
+            }
             if (NetSession.IsClient) { NetSession.SendAction(NetAction.PauseItem, i); return; }
             switch (i)
             {

@@ -262,12 +262,13 @@ namespace BorrowGravity
                 UIKit.Text(new Rect(0, h * 0.40f + 102, w, 26), UIKit.Caps(subtitle), UIKit.Style(UIKit.Face.Display, 16, new Color(UIKit.Dim.r, UIKit.Dim.g, UIKit.Dim.b, a), TextAnchor.MiddleCenter));
             }
 
-            // skip hint (top right, inside the letterbox)
+            // skip hint (top right, inside the letterbox), in the menu style: a white ring that fills as you hold
             var sr = new Rect(w - 330, 26, 300, 40);
             float fill = Mathf.Clamp01(skip / skipHold);
-            UIKit.Dot(new Vector2(sr.x + 18, sr.center.y), 22f, new Color(1, 1, 1, 0.15f));
-            if (fill > 0f) UIKit.Dot(new Vector2(sr.x + 18, sr.center.y), 22f * fill, UIKit.Glow);
-            UIKit.Text(new Rect(sr.x + 38, sr.y, sr.width - 38, sr.height), UIKit.Caps("Hold Space or screen · Skip"), UIKit.Style(UIKit.Face.Display, 12, new Color(1, 1, 1, 0.7f), TextAnchor.MiddleLeft));
+            var ring = new Vector2(sr.x + 18, sr.center.y);
+            MenuStyle.Box(new Rect(ring.x - 12f, ring.y - 12f, 24f, 24f), MenuStyle.W50, 1f, 12f);
+            if (fill > 0f) MenuStyle.Arc(ring, 15f, fill, 1f, 32, 2.6f);
+            MenuStyle.Text(new Rect(sr.x + 40, sr.y, sr.width - 40, sr.height), "HOLD SPACE OR SCREEN  ·  SKIP", UIKit.Face.Heavy, 11, fill > 0f ? 1f : MenuStyle.W80, 0.2f, TextAnchor.MiddleLeft);
 
             float fade = FadeAt(t);
             if (t < flashUntil) fade = Mathf.Max(fade, 0f);

@@ -125,7 +125,8 @@ namespace BorrowGravity
                 if (capturing) return; // nothing over the game while its still is taken
                 if (frosted != null) GUI.DrawTexture(new Rect(0, 0, w, h), frosted, ScaleMode.StretchToFill);
                 UIKit.Fill(new Rect(0, 0, w, h), new Color(0.02f, 0.03f, 0.07f, frosted != null ? 0.58f : 0.72f));
-                if (sm.State == StageState.Intro) DrawIntro(w, h, sm);
+                if (sm.MissionShowing) DrawMission(w, h, sm);
+                else if (sm.State == StageState.Intro) DrawIntro(w, h, sm);
                 else if (sm.State == StageState.Paused) DrawPause(w, h, sm);
                 else DrawComplete(w, h, sm);
                 return;
@@ -140,7 +141,6 @@ namespace BorrowGravity
             DrawWorldMarkers();
             DrawPanels(w);
             DrawPauseButton(w, sm);
-            DrawObjective(w);
             DrawAutoZoneWarning(w);
             DrawCountdown(w);
             DrawWarning(w);
@@ -156,7 +156,7 @@ namespace BorrowGravity
         bool capturing;
 
         static bool WantsBackdrop(StageManager sm) =>
-            sm != null && sm.isActiveAndEnabled && (sm.State == StageState.Intro || sm.State == StageState.Paused || sm.State == StageState.Complete);
+            sm != null && sm.isActiveAndEnabled && (sm.MissionShowing || sm.State == StageState.Intro || sm.State == StageState.Paused || sm.State == StageState.Complete);
 
         void LateUpdate()
         {
@@ -660,6 +660,33 @@ namespace BorrowGravity
             MenuStyle.ShadowAlpha = 0.35f;
         }
 
+        // the mission banner when a stage starts: what to do, in one line
+        static readonly (string title, string line)[] Missions =
+        {
+            ("REACH THE STATION", "Cross the shattered orbit and step into the beacon at the station airlock."),
+            ("FIND THE ENGINE VAULT", "Make it through the upside-down station — the vault waits at the far end."),
+            ("GET BACK TO THE SHIP", "The station is falling apart. Carry the engine home before it's gone."),
+        };
+
+        void DrawMission(float w, float h, StageManager sm)
+        {
+            int n = Mathf.Clamp(sm.stageNumber, 1, Missions.Length);
+            float left = sm.MissionSecondsLeft;
+            // fade in over the first 0.3 s and out over the last 0.4 s
+            float a = Mathf.Clamp01((StageManager.MissionSeconds - left) / 0.3f) * Mathf.Clamp01(left / 0.4f);
+            float cy = h * 0.5f;
+            MenuStyle.ShadowAlpha = 0.8f;
+            MenuStyle.Text(new Rect(0, cy - 92f, w, 14f), "MISSION  ·  STAGE " + n, UIKit.Face.Heavy, 12, MenuStyle.W80 * a, 0.4f, TextAnchor.UpperCenter);
+            MenuStyle.Line(w * 0.5f - 160f, cy - 66f, 320f, MenuStyle.W50 * a);
+            MenuStyle.Text(new Rect(0, cy - 52f, w, 64f), Missions[n - 1].title, UIKit.Face.Display, 52, a, 0.08f, TextAnchor.UpperCenter);
+            MenuStyle.Text(new Rect(0, cy + 22f, w, 24f), Missions[n - 1].line, UIKit.Face.Body, 18, 0.9f * a, 0f, TextAnchor.UpperCenter);
+            // a thin bar that runs out with the banner
+            float bw = 240f * Mathf.Clamp01(left / StageManager.MissionSeconds);
+            UIKit.Fill(new Rect(w * 0.5f - 120f, cy + 70f, 240f, 2f), MenuStyle.White(MenuStyle.W25 * a));
+            UIKit.Fill(new Rect(w * 0.5f - 120f, cy + 70f, bw, 2f), MenuStyle.White(a));
+            MenuStyle.ShadowAlpha = 0.35f;
+        }
+
         /// <summary>The settings screen is open over the pause menu (on this device only).</summary>
         public static bool SettingsOpen;
 
@@ -679,7 +706,7 @@ namespace BorrowGravity
                 bool active = sm.PauseSelection == i, hover = r.Contains(Event.current.mousePosition);
                 MenuStyle.Box(r, active ? MenuStyle.W50 : hover ? MenuStyle.W25 : MenuStyle.W12, 1f);
                 if (active) MenuStyle.Brackets(r);
-                MenuStyle.Text(r, StageManager.PauseItems[i].ToUpperInvariant(), UIKit.Face.Heavy, 15, 1f, 0.22f);
+                MenuStyle.Text(r, StageManager.PauseLabel(i).ToUpperInvariant(), UIKit.Face.Heavy, 15, 1f, 0.22f);
                 if (hover && Event.current.type == EventType.MouseDown) { Event.current.Use(); sm.PauseSelection = i; sm.ChoosePauseItem(i); }
             }
             MenuStyle.Text(new Rect(0, h * 0.33f + StageManager.PauseItems.Length * 58 + 14, w, 18), "W / S choose  ·  Space / Enter confirm  ·  Esc resume",
