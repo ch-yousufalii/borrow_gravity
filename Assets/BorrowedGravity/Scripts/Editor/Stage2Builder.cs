@@ -324,48 +324,15 @@ namespace BorrowGravity.EditorTools
 
             // ---------- 6.8 Engine Vault Door ----------
             Checkpoint(ctx, ctx.Piece("6.8", "Checkpoint_Beacon"), new Vector3(127.5f, Upper, -2.4f), 7, "Engine Vault", new Vector3(3f, 4f, 7f));
-            var nodeA = ConsolePad(ctx, "6.8 Vault", new Vector3(130f, Upper, -0.5f), ctx.Piece("6.8", "Power_Node", 0), 7);
-            var nodeB = ConsolePad(ctx, "6.8 Vault", new Vector3(142f, Upper, -0.5f), ctx.Piece("6.8", "Power_Node", 1), 7);
-            var vcell = Adopt(ctx, ctx.Piece("6.8", "Power_Cell"), "6.8 Vault", "VaultCell");
-            MakeDynamic(vcell, 2f);
-            Gravity(vcell, ZeroGravityResponse.Hover);
-            Nullify(vcell, "Power Cell");
-            Respawn(vcell, 7);
-            vcell.AddComponent<SocketKey>().key = "vaultcell";
-            var vSocket = FloorSocket(ctx, "6.8 Vault", new Vector3(136f, Upper, 1.4f), "vaultcell", 7, "Vault power connected!");
-            var bar = Adopt(ctx, ctx.Piece("6.8", "Vault_LockBar"), "6.8 Vault", "LockBar");
-            bar.transform.position = new Vector3(136f, 8.2f, 3.2f);
-            MakeDynamic(bar, 30f, RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ);
-            Gravity(bar, ZeroGravityResponse.Hover);
-            Respawn(bar, 7);
-            bar.AddComponent<SocketKey>().key = "lockbar";
-            SolidBox(ctx.Group("6.8 Vault"), "BarStop", new Vector3(136f, 10.0f, 3.2f), new Vector3(8f, 0.5f, 1.2f), metal);
-            Zone(ctx, "Vault Lock Field", 7, new Vector3(136f, 7.9f, 3.2f), new Vector3(8.4f, 5.2f, 1.8f), GravityMode.Up,
-                new[] { GravityMode.Up, GravityMode.Down }, players: false,
-                arrows: new[] { new Vector3(131.3f, 8.6f, 2.4f), new Vector3(140.7f, 8.6f, 2.4f) });
-            var slot = TriggerBox(ctx.Group("6.8 Vault"), "LockSlot", new Vector3(136f, 5.9f, 3.2f), new Vector3(7.6f, 1.4f, 1.4f));
-            var barSocket = slot.AddComponent<Socket>();
-            barSocket.section = 7;
-            barSocket.key = "lockbar";
-            barSocket.acceptedMessage = "Lock bar seated!";
-            var vaultGate = new GameObject("VaultLogic").AddComponent<LogicGate>();
-            vaultGate.transform.SetParent(ctx.Group("6.8 Vault"), false);
-            vaultGate.section = 7;
-            vaultGate.inputs = new SignalSource[] { nodeA, nodeB, vSocket, barSocket };
-            vaultGate.latch = true;
+            // the end: the vault stands open, the engine is inside — step into the finish beacon
+            foreach (var piece in new[] { ctx.Piece("6.8", "Power_Node", 0), ctx.Piece("6.8", "Power_Node", 1), ctx.Piece("6.8", "Power_Cell"), ctx.Piece("6.8", "Vault_LockBar") })
+                Remove(piece);
             var vdoor = Adopt(ctx, ctx.Piece("6.8", "Vault_Door"), "6.8 Vault", "VaultDoor");
-            var vd = vaultGate.gameObject.AddComponent<Door>();
-            vd.section = 7;
-            vd.source = vaultGate;
-            vd.parts = new[] { vdoor.transform };
-            vd.openOffsets = new[] { new Vector3(0f, 8.5f, 0f) };
-            vd.speed = 2f;
-            vd.openMessage = "The vault is open — the engine is inside!";
-            var goal = TriggerBox(ctx.Group("6.8 Vault"), "EngineGoal", new Vector3(136f, 6.6f, 8.6f), new Vector3(10f, 3f, 6f));
-            goal.AddComponent<GoalTrigger>().waitingForPartner = "Both of you — get to the engine!";
-            Hint(ctx, "6.8  Engine Vault Door",
-                "The vault door needs power: B steers the power cell onto the floor socket, A drops the heavy lock bar into its slot, then BOTH stand on the power nodes.",
-                new Vector3(128.5f, 6.5f, 0f), new Vector3(1.5f, 4f, 7f), 11f);
+            vdoor.transform.position += new Vector3(0f, 8.5f, 0f);
+            Finish(ctx, "6.8 Vault", new Vector3(136f, Upper, 0f), "Engine Vault");
+            Hint(ctx, "6.8  Engine Vault",
+                "The engine vault is open! Step into the finish beacon to complete the stage.",
+                new Vector3(128.5f, 6.5f, 0f), new Vector3(1.5f, 4f, 7f), 8f);
 
             // ---------- walls ----------
             Wall(ctx, -1f, 146f, -3.6f);

@@ -107,12 +107,30 @@ namespace BorrowGravity.EditorTools
             var go = (GameObject)PrefabUtility.InstantiatePrefab(p, parent);
             go.transform.position = pos;
             go.transform.rotation = Quaternion.Euler(euler);
-            go.transform.localScale = scale ?? Vector3.one;
+            var s = scale ?? Vector3.one;
+            if (Walkable.Contains(prefab)) s.z *= LaneWidth;
+            go.transform.localScale = s;
             if (name != null) go.name = name;
             return go;
         }
 
         // ---------- scene ----------
+
+        /// <summary>Walkways are this much wider than in the art kit layout, so there's room to move around.</summary>
+        public const float LaneWidth = 1.5f;
+
+        // things you walk on: stretched across the lane (z) by LaneWidth
+        static readonly HashSet<string> Walkable = new HashSet<string>
+        {
+            "Bridge_Section", "Bridge_Section_Weak", "Bridge_End_Broken", "Platform_Metal_2x2", "Platform_Metal_4x4",
+            "Platform_Metal_6x3", "Platform_Weak_4x4", "Station_Floor_4x4", "Docking_Platform", "Magnetic_Track_4m"
+        };
+
+        // far-away set dressing: left where the layout put it
+        static bool Backdrop(string prefab) =>
+            prefab.StartsWith("Island_") || prefab.StartsWith("Rock_Debris") || prefab.StartsWith("Mesa_") || prefab.StartsWith("Monolith") ||
+            prefab.StartsWith("Floating_Block") || prefab.StartsWith("Station_Chunk") || prefab.StartsWith("Wreck_Hull") ||
+            prefab.StartsWith("Debris_Plate") || prefab == "Spaceship";
 
         public static StageContext BeginStage(string stage)
         {
@@ -137,9 +155,15 @@ namespace BorrowGravity.EditorTools
                     counts[it.prefab] = n + 1;
                     go.name = $"{it.prefab}[{n}]";
                     ctx.byKey[$"{section.name}|{it.prefab}|{n}"] = go;
-                    go.transform.localPosition = it.pos;
+                    Vector3 pos = it.pos, scl = it.scl;
+                    if (!scenery && !Backdrop(it.prefab) && Mathf.Abs(pos.z) <= 6f)
+                    {
+                        pos.z *= LaneWidth; // walls, rails and props move out with the wider floor
+                        if (Walkable.Contains(it.prefab)) scl.z *= LaneWidth;
+                    }
+                    go.transform.localPosition = pos;
                     go.transform.localRotation = Quaternion.Euler(it.rot);
-                    go.transform.localScale = it.scl;
+                    go.transform.localScale = scl;
                     if (scenery)
                     {
                         foreach (var c in go.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
@@ -440,11 +464,13 @@ namespace BorrowGravity.EditorTools
         /// <summary>Invisible wall from x0 to x1 at depth z (thickness 1), tall.</summary>
         public static void Wall(StageContext ctx, float x0, float x1, float z, float y0 = -40f, float y1 = 60f)
         {
+            z *= LaneWidth;
             SolidBox(ctx.Group("InvisibleWalls"), $"Wall_{x0:0}_{x1:0}_z{z:0.0}", new Vector3((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, z + Mathf.Sign(z) * 0.5f), new Vector3(x1 - x0, y1 - y0, 1f));
         }
 
         public static void EndWall(StageContext ctx, float x, float z0 = -10f, float z1 = 10f)
         {
+            z0 *= LaneWidth; z1 *= LaneWidth;
             SolidBox(ctx.Group("InvisibleWalls"), $"EndWall_{x:0}", new Vector3(x, 10f, (z0 + z1) * 0.5f), new Vector3(1f, 100f, z1 - z0));
         }
 
@@ -466,6 +492,21 @@ namespace BorrowGravity.EditorTools
             h.duration = duration;
             Board(ctx, sectionTitle, message, center + new Vector3(2.6f, 1.5f, 0f));
             return h;
+        }
+
+        /// <summary>
+        /// The end of a stage: a checkpoint beacon with a light (the section's hint board points to it). Whoever
+        /// steps into it finishes the stage for everyone.
+        /// </summary>
+        public static GoalTrigger Finish(StageContext ctx, string group, Vector3 at, string label)
+        {
+            var beacon = Spawn("Checkpoint_Beacon", at, Vector3.zero, ctx.Group(group), null, "Finish_" + label.Replace(' ', '_'));
+            NoColliders(beacon);
+            PointLight(beacon.transform, at + Vector3.up * 3f, new Color(0.55f, 1f, 0.8f), 10f, 4f);
+            var trig = TriggerBox(ctx.Group(group), "FinishGoal", at + new Vector3(0f, 1.5f, 0f), new Vector3(3.5f, 3f, 4.4f));
+            var goal = trig.AddComponent<GoalTrigger>();
+            goal.requiredPlayers = 1;
+            return goal;
         }
 
         /// <summary>A floating instruction board (title + text) that turns to face the camera — see <see cref="InfoBoard"/>.</summary>
@@ -832,6 +873,7 @@ namespace BorrowGravity.EditorTools
             // easier: lasers stay off longer and fire for less time
             on *= 0.75f;
             off *= 1.35f;
+            z0 *= LaneWidth; z1 *= LaneWidth; // still spans the whole (wider) walkway
             var root = new GameObject("LaserGate");
             root.transform.SetParent(ctx.Group(group), false);
             root.transform.position = new Vector3(x, y0, (z0 + z1) * 0.5f);
