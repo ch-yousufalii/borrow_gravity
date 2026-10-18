@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 029d64596fd191cebb8a96d92a4aed5e, type: 3}
+  m_Name: HudIcons
+  m_EditorClassIdentifier: 
+  Power_A_GravityController: {fileID: 2800000, guid: 15711dd5f833cec5095e035483d57adc, type: 3}
+  Power_B_GravityNullifier: {fileID: 2800000, guid: 240b918158884552a93fc87ee4c35301, type: 3}
+  Ring_Cooldown: {fileID: 2800000, guid: 45d1b5062df39c17d9963114fa0a67cb, type: 3}
+  Ring_Track: {fileID: 2800000, guid: 8cbbf740a33207c38a8f7f6e14f4d8fe, type: 3}
+  Ring_Active: {fileID: 2800000, guid: aa50b75c02daae444829e74c901101d7, type: 3}
+  Gravity_Down: {fileID: 2800000, guid: 831b45e6a1fb9b0f6885efd172ec2ada, type: 3}
+  Gravity_Up: {fileID: 2800000, guid: 66a2efb8a74fff441b07695d1e17c62b, type: 3}
+  Gravity_Left: {fileID: 2800000, guid: ad774b6697558cb5ea80914bc3b317f0, type: 3}
+  Gravity_Right: {fileID: 2800000, guid: 017c1f712611547e0a4795a5466aea21, type: 3}
+  Gravity_Off: {fileID: 2800000, guid: fa79ebacc1074c3d2b842efa96e2cc92, type: 3}
+  Gravity_Zero: {fileID: 2800000, guid: 0d0dbb8c991bc537bb45925168ccb14c, type: 3}
+  Warn_General: {fileID: 2800000, guid: e8ea7761be19a1f54bcb8a87a48318a6, type: 3}
+  Warn_FallingDebris: {fileID: 2800000, guid: 6bcb63a62b989650f8bcfc95b186b79c, type: 3}
+  Warn_SwingingCable: {fileID: 2800000, guid: 752008a9e80822d67a198853420fe4f0, type: 3}
+  Warn_BridgeCrack: {fileID: 2800000, guid: 192756679d5ff8f748ebd078e7758687, type: 3}
+  Warn_GravityShift: {fileID: 2800000, guid: a48e921cd4ca73a43a6f5477923d5641, type: 3}
+  Warn_Decompression: {fileID: 2800000, guid: 81354c5244b45e522ae20ffc5034915f, type: 3}
+  Warn_Electric: {fileID: 2800000, guid: d229242fa4852fdf8a8fd33b1e4830c8, type: 3}
+  Countdown_Ring: {fileID: 2800000, guid: 23a38c3e8580ea2bb8bb2315d7c86660, type: 3}
+  Danger_Pulse: {fileID: 2800000, guid: 92f3dd4a22f03f6649a0dd2a65f7ae09, type: 3}
+  Icon_Engine: {fileID: 2800000, guid: 589b032d32a06744a9205ab149280c10, type: 3}
+  Meter_Engine_Frame: {fileID: 2800000, guid: 8bfeb665440d8b2ab97aa319ac34be49, type: 3}
+  Meter_Fill: {fileID: 2800000, guid: 0c864fd9ac1baa9fb91deedbfb025d37, type: 3}
+  Tilt_Gauge: {fileID: 2800000, guid: 97ae63e1ac7b3fdc39110a411a2e5e05, type: 3}
+  Tilt_Needle: {fileID: 2800000, guid: 6efa929feea1439a29ea80db8b3a782c, type: 3}
+  Checkpoint_Badge: {fileID: 2800000, guid: 2107e054a094f7bac9a39aaae6e4075d, type: 3}
+  Banner_Checkpoint: {fileID: 2800000, guid: 61db6aa8cc5232b6896bdfda266623f6, type: 3}
+  Banner_Objective: {fileID: 2800000, guid: 3fa6207d7161f269881ff5ef027cf918, type: 3}
+  Banner_Danger: {fileID: 2800000, guid: f9823c0de0a7cb2a7b551b2e57e3c4e1, type: 3}
+  Objective_Station: {fileID: 2800000, guid: f353263ad76dc3a0ebf6288098a0d726, type: 3}
+  Objective_Engine: {fileID: 2800000, guid: d64f95d4de831d1e58d4a7a2d204070f, type: 3}
+  Objective_Ship: {fileID: 2800000, guid: 2d838027e20767a10840c92e6514f909, type: 3}
+  Tag_Player_A: {fileID: 2800000, guid: 38805d61090910ba0ad0862fbe3aa177, type: 3}
+  Tag_Player_B: {fileID: 2800000, guid: b9c2539cd30a71e6295a0acd6d0470e7, type: 3}
+  Offscreen_Arrow: {fileID: 2800000, guid: 4300400d77ba76c3a98c7872167a42da, type: 3}

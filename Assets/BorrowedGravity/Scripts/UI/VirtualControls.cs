@@ -1,0 +1,145 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace BorrowGravity
+{
+    /// <summary>
+    /// On-screen joystick + JUMP + POWER for each player, in that player's half of the split screen.
+    /// Works with multi-touch and the mouse; feeds <see cref="VirtualInput"/>. J toggles it.
+    /// </summary>
+    public class VirtualControls : MonoBehaviour
+    {
+        public static bool Visible = true;
+
+        public HudIcons icons;
+        public float stickRadius = 70f;
+        public float buttonRadius = 46f;
+
+        class Stick { public int pointer = int.MinValue; public Vector2 center, knob; }
+        class Button { public Vector2 center; public bool held; }
+
+        readonly Stick[] sticks = { new Stick(), new Stick() };
+        readonly Button[] jumps = { new Button(), new Button() };
+        readonly Button[] powers = { new Button(), new Button() };
+        readonly List<(int id, Vector2 pos, bool began)> pointers = new List<(int, Vector2, bool)>();
+        bool mouseWasDown;
+
+        /// <summary>Online each phone shows only its own player's controls, across the whole screen.</summary>
+        static bool Shows(int p) => !NetSession.Online || p == NetSession.LocalPlayer;
+
+        void Layout()
+        {
+            float w = UIKit.Width, h = UIKit.Height, half = NetSession.Online ? w : w * 0.5f;
+            float y = h - 150f;
+            for (int p = 0; p < 2; p++)
+            {
+                float x0 = NetSession.Online ? 0f : p * half;
+                sticks[p].center = new Vector2(x0 + 120f, y);
+                jumps[p].center = new Vector2(x0 + half - 90f, y + 18f);
+                powers[p].center = new Vector2(x0 + half - 200f, y - 22f);
+            }
+        }
+
+        void Update()
+        {
+            if (PlayerKeys.Pressed(Key.J)) Visible = !Visible;
+            if (!Visible)
+            {
+                for (int p = 0; p < 2; p++) if (Shows(p)) VirtualInput.Set(p, Vector2.zero, false, false);
+                return;
+            }
+            float s = Screen.height / UIKit.ReferenceHeight;
+            if (s <= 0f) return;
+            Layout();
+            GatherPointers(s);
+
+            for (int p = 0; p < 2; p++)
+            {
+                if (!Shows(p)) continue; // the other player's input arrives over the network
+                var st = sticks[p];
+                // keep the captured pointer, or capture a new press inside the stick area
+                Vector2? pos = null;
+                foreach (var ptr in pointers)
+                {
+                    if (ptr.id == st.pointer) { pos = ptr.pos; break; }
+                    if (st.pointer == int.MinValue && ptr.began && Vector2.Distance(ptr.pos, st.center) < stickRadius * 1.6f)
+                    {
+                        st.pointer = ptr.id;
+                        pos = ptr.pos;
+                        break;
+                    }
+                }
+                if (pos == null) { st.pointer = int.MinValue; st.knob = Vector2.zero; }
+                else st.knob = Vector2.ClampMagnitude((pos.Value - st.center) / stickRadius, 1f);
+
+                jumps[p].held = Touching(jumps[p].center, st.pointer);
+                powers[p].held = Touching(powers[p].center, st.pointer);
+                // GUI y points down, the game's "forward" is up on the stick
+                VirtualInput.Set(p, new Vector2(st.knob.x, -st.knob.y), jumps[p].held, powers[p].held);
+            }
+        }
+
+
+        bool Touching(Vector2 center, int ignorePointer)
+        {
+            foreach (var ptr in pointers)
+                if (ptr.id != ignorePointer && Vector2.Distance(ptr.pos, center) < buttonRadius * 1.2f) return true;
+            return false;
+        }
+
+        void GatherPointers(float s)
+        {
+            pointers.Clear();
+            var ts = Touchscreen.current;
+            if (ts != null)
+                foreach (var t in ts.touches)
+                {
+                    if (!t.press.isPressed) continue;
+                    var sp = t.position.ReadValue();
+                    pointers.Add((t.touchId.ReadValue(), new Vector2(sp.x / s, (Screen.height - sp.y) / s), t.press.wasPressedThisFrame));
+                }
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.isPressed)
+            {
+                var sp = mouse.position.ReadValue();
+                pointers.Add((-1, new Vector2(sp.x / s, (Screen.height - sp.y) / s), !mouseWasDown));
+            }
+            mouseWasDown = mouse != null && mouse.leftButton.isPressed;
+        }
+
+        void OnGUI()
+        {
+            if (!Visible) return;
+            var sm = StageManager.Instance;
+            if (sm != null && sm.State != StageState.Playing) return;
+            UIKit.Begin();
+            Layout();
+            for (int p = 0; p < 2; p++)
+            {
+                if (!Shows(p)) continue;
+                Color c = p == 0 ? UIKit.Sun : UIKit.Glow;
+                var st = sticks[p];
+                float d = stickRadius * 2f;
+                UIKit.Dot(st.center, d, new Color(UIKit.Void.r, UIKit.Void.g, UIKit.Void.b, 0.35f));
+                UIKit.Tex(new Rect(st.center.x - stickRadius, st.center.y - stickRadius, d, d), icons?.Ring_Track, new Color(1, 1, 1, 0.7f));
+                var knob = st.center + st.knob * stickRadius;
+                UIKit.Dot(knob, 54f, new Color(c.r, c.g, c.b, st.pointer != int.MinValue ? 0.9f : 0.55f));
+                UIKit.Dot(knob, 30f, new Color(1, 1, 1, 0.35f));
+                UIKit.Text(new Rect(st.center.x - 60, st.center.y + stickRadius + 4, 120, 18), UIKit.Caps(p == 0 ? "Player A" : "Player B"), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
+                DrawButton(jumps[p], c, "Jump", null);
+                DrawButton(powers[p], c, p == 0 ? "Gravity" : "Nullify", p == 0 ? icons?.Power_A_GravityController : icons?.Power_B_GravityNullifier);
+            }
+        }
+
+        void DrawButton(Button b, Color c, string label, Texture icon)
+        {
+            float d = buttonRadius * 2f;
+            UIKit.Dot(b.center, d, new Color(UIKit.Void.r, UIKit.Void.g, UIKit.Void.b, b.held ? 0.7f : 0.4f));
+            UIKit.Tex(new Rect(b.center.x - buttonRadius, b.center.y - buttonRadius, d, d), icons?.Ring_Track, b.held ? c : new Color(1, 1, 1, 0.7f));
+            if (icon != null) UIKit.Tex(new Rect(b.center.x - buttonRadius * 0.62f, b.center.y - buttonRadius * 0.62f, d * 0.62f, d * 0.62f), icon);
+            else UIKit.Text(new Rect(b.center.x - 40, b.center.y - 12, 80, 24), UIKit.Caps(label), UIKit.Style(UIKit.Face.Display, 13, b.held ? c : UIKit.Ink, TextAnchor.MiddleCenter));
+            if (icon != null) UIKit.Text(new Rect(b.center.x - 50, b.center.y + buttonRadius + 2, 100, 16), UIKit.Caps(label), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
+        }
+    }
+}
