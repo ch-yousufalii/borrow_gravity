@@ -96,7 +96,7 @@ namespace BorrowGravity
             ("(or B steers it — hold Right Shift)", "(or hold Q to steer it)"), ("A: ", "[E] "), ("B: ", "[Q] "),
             ("A zeroes", "[E] zero"), ("A restores", "[E] restore"), ("A drops", "[E] drop"),
             ("B steers", "[Q] steer"), ("B freezes", "[Q] freeze"), ("A carries the orange one, B the cyan one", "you carry one"),
-            ("Right Shift", "Q"), ("BOTH stand", "stand"), ("you're both", "you're"), ("Run across together", "Run across"),
+            ("B: aim at", "[Q] aim at"), ("hold Right Shift", "hold Q"), ("Right Shift", "Q"), ("Stand on both console pads", "Stand on the console pads"), ("BOTH stand", "stand"), ("you're both", "you're"), ("Run across together", "Run across"),
             ("then run together", "then run"), ("move together", "move on"),
         };
 

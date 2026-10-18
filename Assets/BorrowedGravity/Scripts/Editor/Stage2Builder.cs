@@ -147,7 +147,8 @@ namespace BorrowGravity.EditorTools
             RemoveWallsAt(ctx, "6.3", 54f, 5f);
             RemoveWallsAt(ctx, "6.4", 58f, 5f);
             Spawn("Station_Floor_4x4", new Vector3(55f, 4.7f, 6.5f), Vector3.zero, ctx.Group("6.3 Lane"), new Vector3(2f, 1f, 1f), "BayFloor");
-            var jam = Spawn("Cargo_Container", new Vector3(55f, Upper, 1.3f), Vector3.zero, ctx.Group("6.3 Lane"), null, "JammedContainer");
+            // pushed toward the back bay, so there is room to walk past it on the camera side
+            var jam = Spawn("Cargo_Container", new Vector3(55f, Upper, 4.2f), Vector3.zero, ctx.Group("6.3 Lane"), null, "JammedContainer");
             MakeDynamic(jam, 60f);
             Gravity(jam, ZeroGravityResponse.Hover);
             Nullify(jam, "Jammed Container", 9f, true, 2.4f);
@@ -179,7 +180,7 @@ namespace BorrowGravity.EditorTools
             conv.speed = 2.6f;
             conv.spawnInterval = 4.2f;
             Hint(ctx, "6.3  Magnetic Cargo Lane",
-                "Cargo slides down the magnetic lane — step into the side bays (toward the camera) to let it pass.\nA jammed container blocks the exit: A zeroes its gravity, B steers it into the back bay.",
+                "Cargo slides down the lane — wait in a side bay (toward the camera) until it passes, then run.\nAt the exit, walk past the jammed container on the near side. A: press E to make its field ZERO-G if you want it to float out of the way.",
                 new Vector3(36f, 6.5f, 0f), new Vector3(1.5f, 4f, 7f), 11f);
 
             // ---------- 6.4 Airlock Timer ----------
@@ -215,7 +216,7 @@ namespace BorrowGravity.EditorTools
             entry.speed = 6f;
             SlidingDoor(ctx, "6.4 Airlock", 66.2f, success, invert: false, latch: true).openMessage = "Airlock open!";
             Hint(ctx, "6.4  Airlock Timer",
-                "Hull breach ahead! When the countdown starts: B steers the floating power cell onto the floor socket, A restores gravity to seat it, then BOTH stand on the console pads.",
+                "Hull breach — the room is ZERO-G and a countdown starts!\n1) B: aim at the floating power cell, hold Right Shift and steer it over the glowing floor socket.\n2) A: press E to switch the room's gravity DOWN so the cell drops in.\n3) Stand on both console pads to open the door.",
                 new Vector3(57.6f, 6.5f, 0f), new Vector3(1f, 4f, 7f), 11f);
 
             // ---------- 6.5 Broken Wall Walk ----------
