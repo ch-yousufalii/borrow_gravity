@@ -11,7 +11,7 @@ namespace BorrowGravity
     {
         Query = 1, Answer = 2, Hello = 3, Welcome = 4, Ping = 5, Bye = 6,
         Input = 10, Action = 11,
-        Scene = 20, World = 21, Hud = 22, Ui = 23, Sfx = 24, Spawn = 25, Despawn = 26
+        Scene = 20, World = 21, Hud = 22, Ui = 23, Sfx = 24, Spawn = 25, Despawn = 26, Stage = 27
     }
 
     enum UiEvt : byte { Warning, Checkpoint, Message, Hint, Toast, Objective, Section, CountdownStart, CountdownStop, Shake }

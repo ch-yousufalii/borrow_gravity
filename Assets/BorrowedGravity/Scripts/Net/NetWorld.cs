@@ -22,7 +22,8 @@ namespace BorrowGravity
         static readonly HashSet<string> ClientKeeps = new HashSet<string>
         {
             nameof(PlayerController), nameof(GameUI), nameof(CoopCamera), nameof(VirtualControls), nameof(SuitAnimator),
-            nameof(TimeOfDay), nameof(PlayerCameraLink), nameof(StageManager), nameof(NetWorld), nameof(GravityZone)
+            nameof(TimeOfDay), nameof(PlayerCameraLink), nameof(StageManager), nameof(NetWorld), nameof(GravityZone),
+            nameof(Cutscene), nameof(GameStages), nameof(StageRoot)
         };
 
         readonly List<Transform> list = new List<Transform>();
@@ -108,6 +109,13 @@ namespace BorrowGravity
             if (renderers[i] != null && renderers[i].enabled) f |= 2;
             if (lights[i] != null && lights[i].enabled) f |= 4;
             return f;
+        }
+
+        /// <summary>A new level came on inside the same scene: its players have their own cameras to set up.</summary>
+        public void OnStageShown()
+        {
+            targets.Clear();
+            SetupScreens();
         }
 
         /// <summary>One player per phone: this phone's camera fills the screen, the other one is switched off.</summary>

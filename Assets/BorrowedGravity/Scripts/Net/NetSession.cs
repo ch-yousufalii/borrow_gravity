@@ -201,7 +201,8 @@ namespace BorrowGravity
         static void OnSceneLoaded(Scene s, LoadSceneMode mode)
         {
             ApplyingRemote = false;
-            if (Online && UnityEngine.Object.FindFirstObjectByType<StageManager>() != null) NetWorld.Setup(s);
+            // single Game scene: GameStages sets the world up when it shows a stage; separate stage scenes: here
+            if (Online && NetWorld.Instance == null && UnityEngine.Object.FindFirstObjectByType<StageManager>() != null) NetWorld.Setup(s);
         }
 
         void Update()
@@ -279,6 +280,7 @@ namespace BorrowGravity
                             // already in a stage (the other phone rejoined)? send it there
                             var active = SceneManager.GetActiveScene().name;
                             if (active != GameFlow.MenuScene) SendScene(active, GameFlow.ShowIntro);
+                            if (GameStages.Instance != null) SendStage(GameStages.Instance.Current, GameFlow.ShowIntro);
                         }
                         return;
                     }
@@ -326,6 +328,16 @@ namespace BorrowGravity
                     Time.timeScale = 1f;
                     Sfx.StopAllLoops();
                     SceneManager.LoadScene(scene);
+                    break;
+                }
+                case NetMsg.Stage:
+                {
+                    int stage = r.ReadInt32();
+                    GameFlow.ShowIntro = r.ReadBoolean();
+                    GameFlow.PendingStage = stage;
+                    // already in the Game scene: switch now; otherwise the scene shows it when it finishes loading
+                    var gs = GameStages.Instance;
+                    if (!ApplyingRemote && gs != null && SceneManager.GetActiveScene().name == GameFlow.GameScene) gs.Show(stage);
                     break;
                 }
                 case NetMsg.World: NetWorld.Instance?.ReadWorld(r); break;
@@ -452,6 +464,16 @@ namespace BorrowGravity
             if (!IsHost || !Connected) return;
             Write(NetMsg.Scene);
             writer.Write(scene);
+            writer.Write(showIntro);
+            SendTo(peer);
+        }
+
+        /// <summary>Host: a level was switched inside the Game scene.</summary>
+        public static void SendStage(int stage, bool showIntro)
+        {
+            if (!IsHost || !Connected) return;
+            Write(NetMsg.Stage);
+            writer.Write(stage);
             writer.Write(showIntro);
             SendTo(peer);
         }

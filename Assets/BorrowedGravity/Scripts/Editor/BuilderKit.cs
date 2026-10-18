@@ -215,12 +215,14 @@ namespace BorrowGravity.EditorTools
             EditorSceneManager.SaveScene(ctx.scene, path);
         }
 
-        /// <summary>Adds our scenes (enabled, in this order) after the scenes already in Build Settings, which are left untouched.</summary>
-        public static void SetBuildScenes(params string[] paths)
+        /// <summary>
+        /// Puts our scenes first (enabled, in this order — the main menu is what a build opens), drops the scenes in
+        /// <paramref name="remove"/>, and keeps any other scenes already listed after them.
+        /// </summary>
+        public static void SetBuildScenes(string[] paths, params string[] remove)
         {
-            // the game's scenes first (the main menu is what a build opens), then any other scenes already listed
             var list = paths.Select(p => new EditorBuildSettingsScene(p, true)).ToList();
-            list.AddRange(EditorBuildSettings.scenes.Where(s => !paths.Contains(s.path)));
+            list.AddRange(EditorBuildSettings.scenes.Where(s => !paths.Contains(s.path) && !remove.Contains(s.path)));
             EditorBuildSettings.scenes = list.ToArray();
         }
 
