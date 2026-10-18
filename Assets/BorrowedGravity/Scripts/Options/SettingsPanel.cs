@@ -16,7 +16,7 @@ namespace BorrowGravity
         static readonly string[] ControlLabels = { "MOVEMENT", "BUTTON SIZE", "JOYSTICK SIZE", "JOYSTICK SENSITIVITY", "CAMERA SENSITIVITY" };
         static readonly string[] ControlHints =
         {
-            "Floating joystick on the left half, or four arrow buttons.",
+            "Fixed joystick on the left, or four arrow buttons.",
             "Size of the JUMP and POWER buttons.",
             "Size of the movement joystick.",
             "Higher = less drag needed for full speed.",
