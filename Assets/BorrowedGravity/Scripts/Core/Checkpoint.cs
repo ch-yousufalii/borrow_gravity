@@ -25,6 +25,9 @@ namespace BorrowGravity
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => Active = null;
 
+        /// <summary>A new level starts in the same scene: forget the previous level's checkpoint.</summary>
+        public static void ClearActive() => Active = null;
+
         void Awake()
         {
             GetComponent<Collider>().isTrigger = true;

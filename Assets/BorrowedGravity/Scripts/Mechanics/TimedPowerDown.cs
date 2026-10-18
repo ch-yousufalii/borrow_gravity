@@ -16,22 +16,32 @@ namespace BorrowGravity
         public float warnTime = 1.2f;
         public bool triggeredByCarrier;
         public bool triggeredByPlayers = true;
+        [Tooltip("How many players must be inside the trigger at once (2 = only when both are on it).")]
+        public int requiredPlayers = 1;
         [Tooltip("Run again whenever the trigger is re-entered after the sequence ended.")]
         public bool rearm = true;
         public HudHazard hazard = HudHazard.BridgeCrack;
         public string warningText = "Platforms powering down — move!";
 
         Coroutine running;
+        readonly System.Collections.Generic.HashSet<PlayerController> inside = new System.Collections.Generic.HashSet<PlayerController>();
 
         public bool Running => running != null;
         public int Section => section;
 
         void OnTriggerEnter(Collider other)
         {
+            var p = Players.From(other);
+            if (p != null) inside.Add(p);
             if (running != null) return;
-            bool player = Players.From(other) != null;
             bool carrier = other.GetComponentInParent<EngineCarrier>() != null;
-            if ((triggeredByPlayers && player) || (triggeredByCarrier && carrier)) Begin();
+            if ((triggeredByPlayers && p != null && inside.Count >= requiredPlayers) || (triggeredByCarrier && carrier)) Begin();
+        }
+
+        void OnTriggerExit(Collider other)
+        {
+            var p = Players.From(other);
+            if (p != null) inside.Remove(p);
         }
 
         public void Begin()

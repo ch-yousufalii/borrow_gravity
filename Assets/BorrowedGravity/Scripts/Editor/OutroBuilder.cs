@@ -15,6 +15,8 @@ namespace BorrowGravity.EditorTools
     {
         public const string ScenePath = "Assets/Scenes/Outro.unity";
 
+        const float HandY = 0.62f;
+
         static readonly Color ColA = new Color(1f, 0.62f, 0.36f);
         static readonly Color ColB = new Color(0.36f, 0.88f, 1f);
         static readonly Color Narrator = new Color(0.8f, 0.75f, 0.9f);
@@ -40,19 +42,20 @@ namespace BorrowGravity.EditorTools
             var engineGlow = PointLight(ship.transform, shipPos + new Vector3(0f, 1.5f, 0f), new Color(0.35f, 0.9f, 1f), 12f, 5f);
             engineGlow.gameObject.name = "EngineGlow";
 
-            // the new engine on its stretcher, carried between the two astronauts
-            var load = new GameObject("NewEngine").transform;
-            load.SetParent(root, false);
-            var stretcher = Spawn("Engine_Carrier", Vector3.zero, Vector3.zero, load, null, "Stretcher");
-            var core = Spawn("Engine_Core", new Vector3(0f, 0.75f, 0f), Vector3.zero, load, null, "Core");
-            NoColliders(stretcher);
-            NoColliders(core);
+            // the new engine in two halves, one in each astronaut's hands
+            var halfA = EngineHalf(root, "EngineHalf_A", new Color(1f, 0.62f, 0.36f));
+            var halfB = EngineHalf(root, "EngineHalf_B", new Color(0.36f, 0.88f, 1f));
             var bayPos = new Vector3(162f, -0.2f, 0.4f);
             var baySparks = Particles(root, "BaySparks", bayPos + new Vector3(0f, 1.2f, 0f), Kind.Explosion);
 
             const float deckY = 0.72f;
-            var a = Actor(root, 0, new Vector3(151.65f, deckY, 0f));
-            var b = Actor(root, 1, new Vector3(156.35f, deckY, 0f));
+            var a = Actor(root, 0, new Vector3(152f, deckY, -0.6f));
+            var b = Actor(root, 1, new Vector3(152.4f, deckY, 0.6f));
+            foreach (var actor in new[] { a, b })
+            {
+                var anim = actor.GetComponent<SuitAnimator>();
+                if (anim != null) anim.holdArms = true;
+            }
 
             // ---------- camera ----------
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
@@ -88,17 +91,22 @@ namespace BorrowGravity.EditorTools
 
             // ---------- action ----------
             // the carry: the engine between them, both walking in step
-            Move(cs, load, 0f, 7f, new Vector3(154f, -0.05f, 0f), new Vector3(162f, -0.05f, 0f), Vector3.zero, Vector3.zero);
-            Move(cs, a, 0f, 7f, new Vector3(151.65f, deckY, 0f), new Vector3(159.65f, deckY, 0f), new Vector3(0, 90, 0), new Vector3(0, 90, 0), true);
-            Move(cs, b, 0f, 7f, new Vector3(156.35f, deckY, 0f), new Vector3(164.35f, deckY, 0f), new Vector3(0, 90, 0), new Vector3(0, 90, 0), true);
-            // into the bay, then up into the ship
-            Move(cs, load, 7.5f, 1.6f, new Vector3(162f, -0.05f, 0f), bayPos, Vector3.zero, new Vector3(0, 90, 0));
-            Move(cs, load, 9.6f, 1.4f, bayPos, shipPos + new Vector3(0f, -0.6f, -1.2f), new Vector3(0, 90, 0), new Vector3(0, 90, 0));
-            Move(cs, a, 7.5f, 1.2f, new Vector3(159.65f, deckY, 0f), new Vector3(160.4f, deckY, -1.2f), new Vector3(0, 90, 0), new Vector3(0, 60, 0), true);
-            Move(cs, b, 7.5f, 1.2f, new Vector3(164.35f, deckY, 0f), new Vector3(163.6f, deckY, -1.2f), new Vector3(0, 270, 0), new Vector3(0, 300, 0), true);
+            Move(cs, a, 0f, 7f, new Vector3(152f, deckY, -0.6f), new Vector3(160f, deckY, -0.6f), new Vector3(0, 90, 0), new Vector3(0, 90, 0), true);
+            Move(cs, b, 0f, 7f, new Vector3(152.4f, deckY, 0.6f), new Vector3(160.4f, deckY, 0.6f), new Vector3(0, 90, 0), new Vector3(0, 90, 0), true);
+            Move(cs, halfA, 0f, 7f, new Vector3(152.65f, HandY, -0.6f), new Vector3(160.65f, HandY, -0.6f), new Vector3(0, 90, 0), new Vector3(0, 90, 0));
+            Move(cs, halfB, 0f, 7f, new Vector3(153.05f, HandY, 0.6f), new Vector3(161.05f, HandY, 0.6f), new Vector3(0, 90, 0), new Vector3(0, 90, 0));
+            // each sets their half into the bay, then the halves slide up into the ship
+            Move(cs, a, 7.3f, 1.2f, new Vector3(160f, deckY, -0.6f), new Vector3(160.8f, deckY, -0.1f), new Vector3(0, 90, 0), new Vector3(0, 70, 0), true);
+            Move(cs, b, 7.3f, 1.2f, new Vector3(160.4f, deckY, 0.6f), new Vector3(161.6f, deckY, 1.3f), new Vector3(0, 90, 0), new Vector3(0, 140, 0), true);
+            Move(cs, halfA, 7.3f, 1.2f, new Vector3(160.65f, HandY, -0.6f), new Vector3(161.5f, HandY, -0.1f), new Vector3(0, 90, 0), new Vector3(0, 70, 0));
+            Move(cs, halfB, 7.3f, 1.2f, new Vector3(161.05f, HandY, 0.6f), new Vector3(162.2f, HandY, 1.0f), new Vector3(0, 90, 0), new Vector3(0, 140, 0));
+            Move(cs, halfA, 8.6f, 0.8f, new Vector3(161.5f, HandY, -0.1f), new Vector3(161.5f, 0.15f, 0.4f), new Vector3(0, 70, 0), new Vector3(0, 90, 0));
+            Move(cs, halfB, 8.8f, 0.8f, new Vector3(162.2f, HandY, 1.0f), new Vector3(162.5f, 0.15f, 0.4f), new Vector3(0, 140, 0), new Vector3(0, 90, 0));
+            Move(cs, halfA, 9.7f, 1.3f, new Vector3(161.5f, 0.15f, 0.4f), shipPos + new Vector3(-0.5f, -0.6f, -1.2f), new Vector3(0, 90, 0), new Vector3(0, 90, 0));
+            Move(cs, halfB, 9.7f, 1.3f, new Vector3(162.5f, 0.15f, 0.4f), shipPos + new Vector3(0.5f, -0.6f, -1.2f), new Vector3(0, 90, 0), new Vector3(0, 90, 0));
             // boarding
-            Move(cs, a, 12f, 2.6f, new Vector3(160.4f, deckY, -1.2f), new Vector3(164.2f, deckY, 2.8f), new Vector3(0, 60, 0), new Vector3(0, 20, 0), true);
-            Move(cs, b, 12.3f, 2.4f, new Vector3(163.6f, deckY, -1.2f), new Vector3(165.8f, deckY, 2.8f), new Vector3(0, 300, 0), new Vector3(0, 340, 0), true);
+            Move(cs, a, 12f, 2.6f, new Vector3(160.8f, deckY, -0.1f), new Vector3(164.2f, deckY, 2.8f), new Vector3(0, 70, 0), new Vector3(0, 20, 0), true);
+            Move(cs, b, 12.3f, 2.4f, new Vector3(161.6f, deckY, 1.3f), new Vector3(165.8f, deckY, 2.8f), new Vector3(0, 140, 0), new Vector3(0, 340, 0), true);
             // lift-off and away
             Move(cs, ship.transform, 16f, 3f, shipPos, shipPos + new Vector3(0f, 4.6f, 0f), shipEuler, shipEuler + new Vector3(-6f, 0f, 0f));
             Move(cs, ship.transform, 19f, 6f, shipPos + new Vector3(0f, 4.6f, 0f), new Vector3(330f, 62f, 60f), shipEuler + new Vector3(-6f, 0f, 0f), shipEuler + new Vector3(-14f, -20f, 8f));
@@ -107,7 +115,8 @@ namespace BorrowGravity.EditorTools
             Cue(cs, 0f, CueType.Deactivate, engineGlow.gameObject);
             Cue(cs, 9.4f, CueType.Burst, baySparks, 1f);
             Cue(cs, 9.4f, CueType.Sound, null, 0.8f, SfxId.Plate);
-            Cue(cs, 11f, CueType.Deactivate, load.gameObject);
+            Cue(cs, 11f, CueType.Deactivate, halfA.gameObject);
+            Cue(cs, 11f, CueType.Deactivate, halfB.gameObject);
             Cue(cs, 11f, CueType.Sound, null, 1f, SfxId.Success);
             Cue(cs, 11f, CueType.Activate, engineGlow.gameObject);
             Cue(cs, 11f, CueType.Activate, trail);
@@ -124,15 +133,39 @@ namespace BorrowGravity.EditorTools
             Cue(cs, 19f, CueType.Sound, null, 1f, SfxId.Impact);
 
             // ---------- dialogue ----------
-            Line(cs, 1.6f, 3f, "", Narrator, "Back at the docking platform, with a brand-new engine...");
-            Line(cs, 4.6f, 2.4f, "A", ColA, "Easy... keep it level...");
-            Line(cs, 7.2f, 2.2f, "B", ColB, "Bay's open — slide it in!");
-            Line(cs, 11.2f, 2.2f, "A", ColA, "Engine's online!");
-            Line(cs, 13.6f, 2.4f, "B", ColB, "Then let's go home. Together.");
-            Line(cs, 20.5f, 4f, "", Narrator, "Two travellers, one borrowed gravity — and a ship that flies again.");
+            Line(cs, 1.6f, 2.9f, "", Narrator, "Back at the docking platform, with a brand-new engine...");
+            Line(cs, 4.7f, 2.1f, "A", ColA, "Got your half? Don't drop it now...");
+            Line(cs, 7.0f, 2.4f, "B", ColB, "Wouldn't dream of it. Bay's open — both halves in!");
+            Line(cs, 9.6f, 1.5f, "A", ColA, "Locking mine in... now!");
+            Line(cs, 11.3f, 2.1f, "B", ColB, "Engine's online! Listen to that hum.");
+            Line(cs, 13.6f, 2.2f, "A", ColA, "Then let's go home. Together.");
+            Line(cs, 16.3f, 2.0f, "B", ColB, "Station's coming apart — punch it!");
+            Line(cs, 20.5f, 3.8f, "", Narrator, "Two travellers, one borrowed gravity — and a ship that flies again.");
+            Line(cs, 24.6f, 2.0f, "A", ColA, "Next time, we bring a spare.");
+
+            // ---------- cinematic sound ----------
+            Cue(cs, 11.0f, CueType.Sound, null, 0.6f, SfxId.Rumble);
+            Cue(cs, 16.0f, CueType.Sound, null, 0.8f, SfxId.Rumble);
+            Cue(cs, 16.2f, CueType.Sound, null, 0.5f, SfxId.Whoosh);
+            Cue(cs, 19.0f, CueType.Sound, null, 1f, SfxId.Boom);
+            Cue(cs, 19.1f, CueType.Sound, null, 0.9f, SfxId.Whoosh);
+            Cue(cs, 24.2f, CueType.Sound, null, 0.7f, SfxId.Riser);
+            Cue(cs, 27.0f, CueType.Sound, null, 0.6f, SfxId.Boom);
 
             foreach (var c in Object.FindObjectsByType<Collider>(FindObjectsSortMode.None)) Object.DestroyImmediate(c);
             Save(ctx, ScenePath);
+        }
+
+        /// <summary>A hand-held engine half (scaled-down core with a coloured glow) for the cutscene.</summary>
+        static Transform EngineHalf(Transform parent, string name, Color glow)
+        {
+            var half = new GameObject(name).transform;
+            half.SetParent(parent, false);
+            var core = Spawn("Engine_Core", Vector3.zero, Vector3.zero, half, Vector3.one * 0.45f, "Core");
+            core.transform.localPosition = new Vector3(0f, -0.25f, 0f);
+            NoColliders(core);
+            PointLight(half, half.position + Vector3.up * 0.6f, glow, 3.5f, 2.2f);
+            return half;
         }
     }
 }

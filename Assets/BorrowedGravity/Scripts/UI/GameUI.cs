@@ -18,8 +18,8 @@ namespace BorrowGravity
         public PlayerController playerA, playerB;
         public GravityPower gravityPower;
         public NullifyPower nullifyPower;
-        public string controlsA = "WASD move · Space jump · E switch zone gravity";
-        public string controlsB = "Arrows move · R-Ctrl / Enter jump · R-Shift tap: nullify, hold: steer";
+        public string controlsA = "WASD / arrows move · mouse or drag to look · Space jump · E switch zone gravity";
+        public string controlsB = "WASD / arrows move · mouse or drag to look · Space jump · E tap: nullify, hold: steer";
 
         class Timed { public string text; public float until; public HudHazard hazard; public float countdownEnd; public float start; }
         Timed warning, checkpoint, message, hint;
@@ -138,9 +138,11 @@ namespace BorrowGravity
             DrawWarning(w);
             DrawCheckpoint(w);
             DrawEngine(w, h);
+            DrawParts(w);
             DrawMessages(w, h);
             DrawHelp(w, h, sm);
             if (sm != null && sm.State == StageState.Paused) DrawPause(w, h, sm);
+            else SettingsOpen = false;
             if (sm != null && sm.State == StageState.Complete) DrawComplete(w, h, sm);
         }
 
@@ -273,7 +275,7 @@ namespace BorrowGravity
         {
             if (countdownValue == null) return;
             float left = Mathf.Max(0f, countdownValue());
-            var c = new Vector2(w * 0.5f, EngineCarrier.Instance != null ? 300 : 262);
+            var c = new Vector2(w * 0.5f, EngineCarrier.Instance != null ? 300 : 300);
             bool urgent = left < 10f;
             float pulse = urgent ? 1f + 0.06f * Mathf.Sin(Time.time * 12f) : 1f;
             float s = 116f * pulse;
@@ -286,7 +288,7 @@ namespace BorrowGravity
         {
             float a = Fade(warning);
             if (a <= 0f) return;
-            var r = new Rect(w * 0.5f - 320 + (1 - a) * 40f, EngineCarrier.Instance != null ? 212 : 140, 640, 120);
+            var r = new Rect(w * 0.5f - 320 + (1 - a) * 40f, EngineCarrier.Instance != null ? 212 : 216, 640, 120);
             var old = GUI.color;
             GUI.color = new Color(1, 1, 1, a);
             UIKit.Tex(r, icons?.Banner_Danger);
@@ -308,7 +310,7 @@ namespace BorrowGravity
         {
             float a = Fade(checkpoint);
             if (a <= 0f) return;
-            var r = new Rect(w * 0.5f - 250, (EngineCarrier.Instance != null ? 336 : 272) - (1 - a) * 20f, 500, 94);
+            var r = new Rect(w * 0.5f - 250, (EngineCarrier.Instance != null ? 336 : 344) - (1 - a) * 20f, 500, 94);
             var old = GUI.color;
             GUI.color = new Color(1, 1, 1, a);
             UIKit.Tex(r, icons?.Banner_Checkpoint);
@@ -337,6 +339,39 @@ namespace BorrowGravity
                 UIKit.Text(new Rect(meter.x, meter.yMax + 2, meter.width + 160, 22), "TILTING — LEVEL THE ENGINE!", UIKit.Style(UIKit.Face.Display, 15, UIKit.Danger, TextAnchor.MiddleCenter));
         }
 
+        /// <summary>Stage 3: who has their engine half (waiting / in hand / installed), under this screen's power panel.</summary>
+        void DrawParts(float w)
+        {
+            int mask = NetSession.IsClient ? NetHud.partsMask : PartsMask();
+            if (mask == 0) return;
+            bool right = NetSession.IsClient;
+            var r = new Rect(right ? w - 18 - 344 : 18, 148, 344, 40);
+            UIKit.Panel(r);
+            UIKit.Text(new Rect(r.x + 14, r.y, 90, r.height), UIKit.Caps("Engine"), UIKit.Style(UIKit.Face.Display, 11, UIKit.Dim, TextAnchor.MiddleLeft));
+            for (int p = 0; p < 2; p++)
+            {
+                int state = (mask >> (p * 2)) & 3; // 1 waiting, 2 held, 3 installed
+                Color c = p == 0 ? UIKit.Sun : UIKit.Glow;
+                string label = state == 3 ? "Installed" : state == 2 ? "In hand" : "Pick it up";
+                var cell = new Rect(r.x + 96 + p * 122, r.y + 8, 114, 24);
+                UIKit.Dot(new Vector2(cell.x + 8, cell.center.y), 12f, state == 1 ? new Color(c.r, c.g, c.b, 0.35f) : state == 3 ? UIKit.Good : c);
+                UIKit.Text(new Rect(cell.x + 18, cell.y, cell.width - 18, cell.height), (p == 0 ? "A  " : "B  ") + label,
+                    UIKit.Style(UIKit.Face.Heavy, 12, state == 1 ? UIKit.Dim : UIKit.Ink, TextAnchor.MiddleLeft));
+            }
+        }
+
+        /// <summary>Two bits per half (A low, B high): 0 none, 1 waiting, 2 held, 3 installed.</summary>
+        public static int PartsMask()
+        {
+            int mask = 0;
+            foreach (var part in EnginePart.All)
+            {
+                int s = part.State == EnginePart.PartState.Installed ? 3 : part.State == EnginePart.PartState.Held ? 2 : 1;
+                mask |= s << (Mathf.Clamp(part.owner, 0, 1) * 2);
+            }
+            return mask;
+        }
+
         void DrawMessages(float w, float h)
         {
             float a = Fade(message);
@@ -345,13 +380,16 @@ namespace BorrowGravity
             float b = Fade(hint, 0.3f, 0.5f);
             if (b > 0f)
             {
-                float y = h - (showHelp ? 220 : 150) - (VirtualControls.Visible ? 140 : 0);
+                // under the title banner: in third person the bottom-middle of the screen is the player's back
+                float y = 132f;
+                // transparent instruction panel: white hairline, corner brackets, no fill (final design)
                 var r = new Rect(w * 0.5f - 400, y, 800, 74);
                 var old = GUI.color;
                 GUI.color = new Color(1, 1, 1, b);
-                UIKit.Panel(r);
-                UIKit.Fill(new Rect(r.x + 10, r.y + 12, 3, r.height - 24), UIKit.Sun);
-                UIKit.Text(new Rect(r.x + 26, r.y + 8, r.width - 40, r.height - 16), hint.text, UIKit.Style(UIKit.Face.Body, 16, UIKit.Ink, TextAnchor.MiddleLeft, true));
+                MenuStyle.Box(r, MenuStyle.W50, 1f);
+                MenuStyle.Brackets(r);
+                MenuStyle.Text(new Rect(r.x + 18, r.y + 6, 120, 12), "INSTRUCTIONS", UIKit.Face.Heavy, 9, MenuStyle.W50, 0.3f, TextAnchor.UpperLeft);
+                UIKit.Text(new Rect(r.x + 18, r.y + 18, r.width - 36, r.height - 22), hint.text, UIKit.Style(UIKit.Face.Body, 15, UIKit.Ink, TextAnchor.MiddleLeft, true));
                 GUI.color = old;
             }
         }
@@ -446,37 +484,102 @@ namespace BorrowGravity
             }
         }
 
+        static readonly string[] StageHints =
+        {
+            "Learn to bend gravity together.", "Flip the station, find the engine.", "Carry the engine home — fast."
+        };
+
+        /// <summary>
+        /// The stage instructions card (final design): a transparent double-hairline box with the stage, its hint,
+        /// difficulty and keys on the left, mode / objective / players on the right, the story below, a waving
+        /// astronaut in the corner and "Ready when you are" underneath. Tap or Space to start.
+        /// </summary>
         void DrawIntro(float w, float h, StageManager sm)
         {
-            UIKit.Shade(0.84f);
-            UIKit.Tex(new Rect(w * 0.5f - 52, 84, 104, 104), icons != null ? icons.Objective(sm.objective) : null);
-            UIKit.Text(new Rect(0, 196, w, 22), UIKit.Caps(StageShortTitle(sm.stageTitle).Split('·')[0].Trim(), 2), UIKit.Style(UIKit.Face.Display, 15, UIKit.Sun, TextAnchor.MiddleCenter));
+            float bw = Mathf.Min(w * 0.62f, 1180f), bh = h * 0.66f;
+            var box = new Rect((w - bw) * 0.5f, h * 0.05f, bw, bh);
+            MenuStyle.Box(box, MenuStyle.W50, 1f);
+            MenuStyle.Box(new Rect(box.x + 5f, box.y + 5f, box.width - 10f, box.height - 10f), MenuStyle.W25, 1f);
+            // the small arc ornament on the bottom edge
+            GUI.BeginGroup(new Rect(box.x + bw * 0.195f, box.yMax - 26f, 58f, 22f));
+            MenuStyle.Box(new Rect(0f, 0f, 116f, 116f), MenuStyle.W50, 1f, 58f);
+            GUI.EndGroup();
+
+            int n = Mathf.Clamp(sm.stageNumber, 1, 3);
+            MenuStyle.ShadowAlpha = 0.8f; // transparent card over the live game: stronger shadow for legibility
             string sub = sm.stageTitle.Contains("—") ? sm.stageTitle.Substring(sm.stageTitle.IndexOf('—') + 1).Trim() : sm.stageTitle;
-            UIKit.Text(new Rect(0, 222, w, 60), sub, UIKit.Style(UIKit.Face.Display, 46, UIKit.Ink, TextAnchor.MiddleCenter));
-            var body = new Rect(w * 0.5f - 430, 300, 860, 230);
-            UIKit.Panel(body, true);
-            UIKit.Text(new Rect(body.x + 30, body.y + 22, body.width - 60, body.height - 40), sm.introText, UIKit.Style(UIKit.Face.Body, 19, UIKit.Ink, TextAnchor.UpperCenter, true));
-            float y = 560;
-            UIKit.PowerRing(new Rect(w * 0.5f - 400, y, 84, 84), icons?.Ring_Track, icons?.Ring_Cooldown, icons?.Power_A_GravityController, 1f, UIKit.Sun);
-            UIKit.Text(new Rect(w * 0.5f - 306, y + 14, 300, 22), UIKit.Caps("Player A"), UIKit.Style(UIKit.Face.Display, 13, UIKit.Sun));
-            UIKit.Text(new Rect(w * 0.5f - 306, y + 36, 300, 40), controlsA, UIKit.Style(UIKit.Face.Body, 14, UIKit.Ink, TextAnchor.UpperLeft, true));
-            UIKit.PowerRing(new Rect(w * 0.5f + 20, y, 84, 84), icons?.Ring_Track, icons?.Ring_Cooldown, icons?.Power_B_GravityNullifier, 1f, UIKit.Glow);
-            UIKit.Text(new Rect(w * 0.5f + 114, y + 14, 300, 22), UIKit.Caps("Player B"), UIKit.Style(UIKit.Face.Display, 13, UIKit.Glow));
-            UIKit.Text(new Rect(w * 0.5f + 114, y + 36, 300, 40), controlsB, UIKit.Style(UIKit.Face.Body, 14, UIKit.Ink, TextAnchor.UpperLeft, true));
-            float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 4f);
-            UIKit.Text(new Rect(0, h - 120, w, 34), UIKit.Caps("Tap or press Space to start"), UIKit.Style(UIKit.Face.Display, 18, new Color(1, 1, 1, pulse), TextAnchor.MiddleCenter));
+            float lx = box.x + bw * 0.06f, lw = bw * 0.5f, y = box.y + 34f;
+            MenuStyle.Text(new Rect(lx, y, lw, 12f), "STAGE", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperLeft);
+            y += 18f;
+            MenuStyle.Text(new Rect(lx, y, lw, 44f), (n + " · " + sub).ToUpperInvariant(), UIKit.Face.Display, 30, 1f, 0.02f, TextAnchor.UpperLeft);
+            y += 50f;
+            MenuStyle.Text(new Rect(lx, y, lw, 18f), StageHints[n - 1], UIKit.Face.Body, 14, MenuStyle.W80, 0f, TextAnchor.UpperLeft);
+            y += 30f;
+            MenuStyle.Text(new Rect(lx, y, 100f, 12f), "DIFFICULTY", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperLeft);
+            float px = lx + MenuStyle.Measure("DIFFICULTY", UIKit.Face.Heavy, 10, 0.3f) + 12f;
+            for (int p = 1; p <= 3; p++)
+            {
+                var pip = new Rect(px + (p - 1) * 27f, y + 5f, 22f, 3f);
+                if (p <= n) UIKit.Fill(pip, MenuStyle.White(1f));
+                else MenuStyle.Box(pip, MenuStyle.W50, 1f);
+            }
+            y += 30f;
+            float kx = lx;
+            foreach (var (keys, label) in new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "power"), (new[] { "Mouse" }, "look") })
+            {
+                foreach (var k in keys) kx += MenuStyle.Key(kx, y + 10f, k) + 4f;
+                float tw = MenuStyle.Measure(label, UIKit.Face.Body, 12, 0f);
+                MenuStyle.Text(new Rect(kx, y + 1f, tw + 4f, 18f), label, UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+                kx += tw + 18f;
+            }
+            y += 40f;
+            // the story, in the open space under the keys
+            UIKit.Text(new Rect(lx, y, box.xMax - lx - 40f, box.yMax - y - 30f), sm.introText, UIKit.Style(UIKit.Face.Body, 15, MenuStyle.White(0.9f), TextAnchor.UpperLeft, true));
+
+            // right column: label / value rows with dashed rules
+            float rx = box.x + bw * 0.62f, rw = bw * 0.33f, ry = box.y + 34f;
+            string modeText = NetSession.Online ? (NetSession.IsHost ? "Online · Host" : "Online · Joined") : "Local · 2 Players";
+            foreach (var (label, value) in new[] { ("MODE", modeText), ("OBJECTIVE", sm.objectiveText), ("PLAYERS", "2 · Co-op") })
+            {
+                MenuStyle.Text(new Rect(rx, ry, rw, 18f), label, UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.MiddleLeft);
+                MenuStyle.Text(new Rect(rx, ry, rw, 18f), value, UIKit.Face.Body, 13, MenuStyle.W80, 0f, TextAnchor.MiddleRight);
+                MenuStyle.DashedLine(rx, rx + rw, ry + 26f, MenuStyle.W25);
+                ry += 35f;
+            }
+
+            MenuStyle.Text(new Rect(0, box.yMax + 46f, w, 22f), "Ready when you are. Stay close to your partner, and don't let go.", UIKit.Face.Body, 17, 1f, 0f, TextAnchor.UpperCenter);
+            float pulse = 0.45f + 0.45f * Mathf.Sin(Time.unscaledTime * 4f);
+            MenuStyle.Text(new Rect(0, box.yMax + 82f, w, 14f), "TAP OR PRESS SPACE TO START", UIKit.Face.Heavy, 11, pulse, 0.3f, TextAnchor.UpperCenter);
+
+            MenuStyle.Astronaut(new Vector2(150f, h - 18f), 1f);
+            MenuStyle.ShadowAlpha = 0.35f;
         }
+
+        /// <summary>The settings screen is open over the pause menu (on this device only).</summary>
+        public static bool SettingsOpen;
 
         void DrawPause(float w, float h, StageManager sm)
         {
-            UIKit.Shade(0.72f);
-            UIKit.Text(new Rect(0, h * 0.22f, w, 60), UIKit.Caps("Paused", 2), UIKit.Style(UIKit.Face.Display, 44, UIKit.Ink, TextAnchor.MiddleCenter));
+            MenuStyle.ShadowAlpha = 0.8f; // transparent over the live game
+            if (SettingsOpen)
+            {
+                if (SettingsPanel.Draw(w, h)) SettingsOpen = false;
+                MenuStyle.ShadowAlpha = 0.35f;
+                return;
+            }
+            MenuStyle.Text(new Rect(0, h * 0.2f, w, 50f), "PAUSED", UIKit.Face.Display, 40, 1f, 0.3f);
             for (int i = 0; i < StageManager.PauseItems.Length; i++)
             {
-                var r = new Rect(w * 0.5f - 200, h * 0.38f + i * 62, 400, 50);
-                if (UIKit.Button(r, StageManager.PauseItems[i], sm.PauseSelection == i)) { sm.PauseSelection = i; sm.ChoosePauseItem(i); }
+                var r = new Rect(w * 0.5f - 210, h * 0.33f + i * 58, 420, 48);
+                bool active = sm.PauseSelection == i, hover = r.Contains(Event.current.mousePosition);
+                MenuStyle.Box(r, active ? MenuStyle.W50 : hover ? MenuStyle.W25 : MenuStyle.W12, 1f);
+                if (active) MenuStyle.Brackets(r);
+                MenuStyle.Text(r, StageManager.PauseItems[i].ToUpperInvariant(), UIKit.Face.Heavy, 15, 1f, 0.22f);
+                if (hover && Event.current.type == EventType.MouseDown) { Event.current.Use(); sm.PauseSelection = i; sm.ChoosePauseItem(i); }
             }
-            UIKit.Text(new Rect(0, h * 0.38f + StageManager.PauseItems.Length * 62 + 12, w, 22), "W / S or arrows  ·  Space / Enter to confirm  ·  Esc to resume", UIKit.Style(UIKit.Face.Body, 14, UIKit.Dim, TextAnchor.MiddleCenter));
+            MenuStyle.Text(new Rect(0, h * 0.33f + StageManager.PauseItems.Length * 58 + 14, w, 18), "W / S choose  ·  Space / Enter confirm  ·  Esc resume",
+                UIKit.Face.Body, 13, MenuStyle.W50);
+            MenuStyle.ShadowAlpha = 0.35f;
         }
 
         void DrawComplete(float w, float h, StageManager sm)

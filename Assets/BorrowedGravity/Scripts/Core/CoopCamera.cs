@@ -3,8 +3,10 @@ using UnityEngine;
 namespace BorrowGravity
 {
     /// <summary>
-    /// Side/three-quarter follow camera with shake. In split screen each player has one (targets = that player);
-    /// with several targets it frames them all.
+    /// Each player's own camera, with shake. Default: third-person chase camera behind and above the player that
+    /// slowly turns to follow where they walk (not when they step sideways), stays out of walls and follows the
+    /// player's gravity "up" onto walls, ceilings and the ring. With thirdPerson off it is the older side-on camera
+    /// that frames all targets.
     /// </summary>
     public class CoopCamera : MonoBehaviour
     {
@@ -21,6 +23,28 @@ namespace BorrowGravity
         public float maxExtraDistance = 18f;
         public float minFocusY = -6f;
         public float smoothTime = 0.35f;
+
+        [Header("Third person")]
+        public bool thirdPerson = true;
+        public float distance = 6.2f;
+        public float height = 2.6f;
+        public float lookHeight = 1.3f;
+        public float lookAhead = 2.2f;
+        [Tooltip("How fast the camera swings round behind the player while they walk forward (per second).")]
+        public float followRate = 1.6f;
+        [Tooltip("Direction the camera faces at the start: the way the level goes.")]
+        public Vector3 startHeading = Vector3.right;
+        public float collisionRadius = 0.3f;
+        [Tooltip("Lowest / highest camera tilt in degrees (negative = from below).")]
+        public float minPitch = -12f, maxPitch = 60f;
+        [Tooltip("After the player turns the camera by hand, wait this long before auto-follow takes over again.")]
+        public float manualHold = 1.6f;
+
+        Vector3 heading, camUp = Vector3.up, tpVelocity, lastTargetPos;
+        float pitch = float.NaN, lastManualLook = -10f;
+        Vector3 lastSnapCheck;
+        PlayerController player;
+        readonly RaycastHit[] hits = new RaycastHit[12];
 
         Vector3 velocity, focus;
         bool initialised;
@@ -45,6 +69,7 @@ namespace BorrowGravity
 
         void LateUpdate()
         {
+            if (thirdPerson && FollowPlayer()) return;
             if (!TryGetBounds(out Bounds b)) return;
             Vector3 c = b.center + focusOffset;
             c.y = Mathf.Max(c.y, minFocusY);
@@ -68,6 +93,95 @@ namespace BorrowGravity
                 rot *= Quaternion.Euler(Mathf.PerlinNoise(Time.time * 25f, 0f) * 2f * k - k, Mathf.PerlinNoise(0f, Time.time * 25f) * 2f * k - k, 0f);
             }
             transform.rotation = rot;
+        }
+
+        bool FollowPlayer()
+        {
+            var t = targets != null && targets.Length > 0 ? targets[0] : null;
+            if (t == null || !t.gameObject.activeInHierarchy) return false;
+            if (player == null || player.transform != t) player = t.GetComponent<PlayerController>();
+            float dt = Time.deltaTime;
+            Vector3 up = player != null ? player.Up : Vector3.up;
+
+            if (!initialised)
+            {
+                camUp = up;
+                heading = Vector3.ProjectOnPlane(startHeading, camUp);
+                if (heading.sqrMagnitude < 0.01f) heading = Vector3.ProjectOnPlane(Vector3.forward, camUp);
+                heading.Normalize();
+                lastTargetPos = t.position;
+            }
+            float dist = Mathf.Sqrt(distance * distance + (height - lookHeight) * (height - lookHeight));
+            if (float.IsNaN(pitch)) pitch = Mathf.Atan2(height - lookHeight, distance) * Mathf.Rad2Deg;
+            // gravity changes swing the camera's up smoothly (walls, ceilings, the ring)
+            camUp = Vector3.Slerp(camUp, up, 1f - Mathf.Exp(-5f * dt)).normalized;
+            Vector3 h = Vector3.ProjectOnPlane(heading, camUp);
+            if (h.sqrMagnitude < 0.01f) h = Vector3.ProjectOnPlane(transform.forward, camUp);
+            heading = h.normalized;
+
+            // turned by hand (mouse / finger drag): yaw around "up", tilt up and down
+            Vector2 turn = player != null ? VirtualInput.ConsumeLook(player.playerIndex) : Vector2.zero;
+            if (turn.sqrMagnitude > 0f)
+            {
+                heading = (Quaternion.AngleAxis(turn.x, camUp) * heading).normalized;
+                pitch = Mathf.Clamp(pitch + turn.y, minPitch, maxPitch);
+                lastManualLook = Time.unscaledTime;
+            }
+
+            // follow the walking direction, but only when heading mostly forward (sideways steps don't spin it).
+            // Movement is read from the actual motion, so it also works on the joining phone (where the host moves us).
+            Vector3 vel = dt > 0f ? (t.position - lastTargetPos) / dt : Vector3.zero;
+            lastTargetPos = t.position;
+            Vector3 move = Vector3.ProjectOnPlane(vel, camUp) / 5f;
+            bool teleported = move.sqrMagnitude > 16f;
+            if (move.sqrMagnitude > 1f) move.Normalize();
+            if (!teleported && Time.unscaledTime - lastManualLook > manualHold && move.sqrMagnitude > 0.04f
+                && Vector3.Dot(move.normalized, heading) > 0.35f)
+                heading = Vector3.Slerp(heading, move.normalized, 1f - Mathf.Exp(-followRate * move.magnitude * dt)).normalized;
+
+            Vector3 pivot = t.position + camUp * lookHeight;
+            float pr = pitch * Mathf.Deg2Rad;
+            Vector3 desired = pivot + (-heading * Mathf.Cos(pr) + camUp * Mathf.Sin(pr)) * dist;
+            desired = AvoidWalls(pivot, desired, t);
+            Vector3 look = pivot + heading * lookAhead;
+
+            if (!initialised)
+            {
+                transform.position = desired;
+                tpVelocity = Vector3.zero;
+                initialised = true;
+            }
+            if ((t.position - lastSnapCheck).sqrMagnitude > 64f) transform.position = desired; // respawn / teleport
+            lastSnapCheck = t.position;
+            transform.position = Vector3.SmoothDamp(transform.position, desired, ref tpVelocity, 0.12f);
+            var rot = Quaternion.LookRotation(look - transform.position, camUp);
+            if (Time.time < shakeUntil)
+            {
+                float k = shakeAmount * Mathf.Clamp01((shakeUntil - Time.time) * 2f);
+                rot *= Quaternion.Euler(Mathf.PerlinNoise(Time.time * 25f, 0f) * 2f * k - k, Mathf.PerlinNoise(0f, Time.time * 25f) * 2f * k - k, 0f);
+            }
+            transform.rotation = rot;
+            return true;
+        }
+
+        /// <summary>Pull the camera in front of any wall between it and the player.</summary>
+        Vector3 AvoidWalls(Vector3 pivot, Vector3 desired, Transform target)
+        {
+            Vector3 dir = desired - pivot;
+            float len = dir.magnitude;
+            if (len < 0.01f) return desired;
+            dir /= len;
+            int n = Physics.SphereCastNonAlloc(pivot, collisionRadius, dir, hits, len, ~0, QueryTriggerInteraction.Ignore);
+            float best = len;
+            for (int i = 0; i < n; i++)
+            {
+                var c = hits[i].collider;
+                if (c == null || hits[i].distance <= 0f) continue;
+                if (c.attachedRigidbody != null && !c.attachedRigidbody.isKinematic) continue; // crates, the engine, players
+                if (c.transform.IsChildOf(target) || Players.From(c) != null) continue;
+                best = Mathf.Min(best, hits[i].distance);
+            }
+            return pivot + dir * Mathf.Max(0.8f, best - 0.1f);
         }
 
         bool TryGetBounds(out Bounds b)

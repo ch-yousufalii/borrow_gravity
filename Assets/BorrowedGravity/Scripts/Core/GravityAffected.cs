@@ -6,7 +6,7 @@ namespace BorrowGravity
     {
         /// <summary>Drifts upward until the zone ceiling (loose platforms, debris).</summary>
         Float,
-        /// <summary>Stops and hangs in place (heavy cargo, ferries).</summary>
+        /// <summary>Stops, then glides back to the height it started floating at (boards rise again when gravity goes off).</summary>
         Hover,
         /// <summary>Keeps falling with reduced gravity (players).</summary>
         Reduced
@@ -33,6 +33,12 @@ namespace BorrowGravity
 
         [Header("Hover")]
         public float hoverDamping = 2.5f;
+        [Tooltip("In zero-g, glide back to the starting height, so a board that fell when gravity came on rises again when it goes off.")]
+        public bool returnToHomeHeight = true;
+        public float homeSpeed = 2.6f;
+
+        float homeY;
+        GravityZone homeZone;
 
         [Header("Reduced")]
         [Range(0f, 1f)] public float reducedGravityFactor = 0.6f;
@@ -52,6 +58,12 @@ namespace BorrowGravity
             rb.useGravity = false;
         }
 
+        void Start()
+        {
+            homeY = rb.position.y;
+            if (!isPlayer) homeZone = GravityZone.FindZone(rb.position, false);
+        }
+
         /// <summary>Gravity direction at an arbitrary point for this body (unit, or zero if weightless).</summary>
         public Vector3 DirectionAt(Vector3 point)
         {
@@ -63,6 +75,9 @@ namespace BorrowGravity
         {
             Vector3 pos = rb.position;
             CurrentZone = GravityZone.FindZone(pos, isPlayer);
+            // fell out through the bottom of its own field? that field still decides, so switching it back to
+            // zero-g lifts the board up again
+            if (CurrentZone == null && homeZone != null && homeZone.isActiveAndEnabled && homeZone.IsBelow(pos)) CurrentZone = homeZone;
             Vector3 dir = CurrentZone == null ? Vector3.down : CurrentZone.Direction(pos);
             float mag = BaseGravity * gravityScale * (CurrentZone != null ? CurrentZone.strength : 1f);
             IsWeightless = dir.sqrMagnitude < 0.5f;
@@ -113,10 +128,22 @@ namespace BorrowGravity
                     break;
                 }
                 default:
+                {
                     Gravity = Vector3.zero;
-                    rb.linearVelocity = v * Mathf.Exp(-hoverDamping * dt);
-                    rb.angularVelocity *= Mathf.Exp(-hoverDamping * dt);
+                    float damp = Mathf.Exp(-hoverDamping * dt);
+                    if (returnToHomeHeight && !isPlayer)
+                    {
+                        // ease back up (or down) to the floating height, keeping wherever it was moved sideways
+                        float targetVy = Mathf.Clamp((homeY - pos.y) * 1.5f, -homeSpeed, homeSpeed);
+                        v.y = Mathf.MoveTowards(v.y, targetVy, floatAcceleration * dt);
+                        v.x *= damp;
+                        v.z *= damp;
+                        rb.linearVelocity = v;
+                    }
+                    else rb.linearVelocity = v * damp;
+                    rb.angularVelocity *= damp;
                     break;
+                }
             }
         }
     }

@@ -6,8 +6,8 @@ using static BorrowGravity.EditorTools.BuilderKit;
 namespace BorrowGravity.EditorTools
 {
     /// <summary>
-    /// Stage 3 — Engine Run: The Collapsing Return (PRD 7.1–7.8). Both players push the engine carrier the whole way;
-    /// checkpoints are activated by the carrier and respawn it there.
+    /// Stage 3 — Engine Run: The Collapsing Return (PRD 7.1–7.8). The new engine comes in two halves: each player picks
+    /// up their own half and carries it in their hands all the way back to the ship, where both are installed.
     /// </summary>
     public static class Stage3Builder
     {
@@ -20,68 +20,23 @@ namespace BorrowGravity.EditorTools
             var charged = Lit("ChargedStrip", new Color(1f, 0.15f, 0.1f), new Color(1f, 0.15f, 0.1f) * 4f);
             var safe = Lit("SafeMarker", new Color(0.2f, 1f, 0.5f), new Color(0.2f, 1f, 0.5f) * 2f);
 
-            // ---------- the engine carrier ----------
-            var carrier = new GameObject("EngineCarrier");
-            carrier.transform.SetParent(ctx.Group("Engine"), false);
-            carrier.transform.position = new Vector3(9f, 0.06f, 0f);
-            var carrierMesh = Adopt(ctx, ctx.Piece("7.1", "Engine_Carrier"), "Engine");
-            carrierMesh.transform.SetParent(carrier.transform, false);
-            carrierMesh.transform.localPosition = Vector3.zero;
-            carrierMesh.transform.localRotation = Quaternion.identity;
-            var coreMesh = Adopt(ctx, ctx.Piece("7.1", "Engine_Core"), "Engine");
-            coreMesh.transform.SetParent(carrier.transform, false);
-            coreMesh.transform.localPosition = new Vector3(0f, 0.75f, 0f);
-            coreMesh.transform.localRotation = Quaternion.identity;
-            NoColliders(carrier);
-            const string gripPath = "Assets/Materials/Game/CarrierGrip.physicMaterial";
-            var friction = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(gripPath);
-            if (friction == null)
-            {
-                friction = new PhysicsMaterial("CarrierGrip");
-                AssetDatabase.CreateAsset(friction, gripPath);
-            }
-            friction.dynamicFriction = 0.8f;
-            friction.staticFriction = 0.9f;
-            friction.frictionCombine = PhysicsMaterialCombine.Maximum;
-            // rounded base so it rides over small lips between pieces
-            var b1 = carrier.AddComponent<CapsuleCollider>();
-            b1.direction = 0;
-            b1.radius = 0.5f;
-            b1.height = 4.1f;
-            b1.center = new Vector3(0f, 0.5f, 0f);
-            b1.sharedMaterial = friction;
-            var b2 = carrier.AddComponent<BoxCollider>();
-            b2.center = new Vector3(-0.2f, 1.7f, 0f);
-            b2.size = new Vector3(3.8f, 1.9f, 1.9f);
-            b2.sharedMaterial = friction;
-            var crb = carrier.AddComponent<Rigidbody>();
-            crb.mass = 10f;
-            crb.useGravity = false;
-            crb.interpolation = RigidbodyInterpolation.Interpolate;
-            crb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            crb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY;
-            crb.centerOfMass = new Vector3(0f, 0.6f, 0f);
-            Gravity(carrier, ZeroGravityResponse.Float, 2f, 1.0f, 2.3f);
-            carrier.AddComponent<Pushable>();
-            carrier.AddComponent<EngineCarry>();
-            var engine = carrier.AddComponent<EngineCarrier>();
-            engine.impactThreshold = 8f;
-            Nullify(carrier, "Engine", 8f, false, 2.6f);
-            carrier.AddComponent<PlateWeight>();
-            carrier.AddComponent<SocketKey>().key = "engine";
+            // ---------- the two engine halves (one each, carried in the hands) ----------
+            Remove(ctx.Piece("7.1", "Engine_Carrier"));
+            EngineHalf(ctx, 0, ctx.Piece("7.1", "Engine_Core"), new Vector3(7.2f, 0.4f, -1.0f));
+            EngineHalf(ctx, 1, null, new Vector3(7.2f, 0.4f, 1.0f));
 
             // ---------- 7.1 Engine Handling ----------
             var start = Checkpoint(ctx, ctx.Piece("7.1", "Checkpoint_Beacon"), new Vector3(2f, 0.03f, -2.6f), 0, "Engine Bay",
-                new Vector3(6f, 4f, 6f), isStart: true, carrierSpawn: SpawnPoint(ctx, new Vector3(9f, 0.06f, 0f)), spawnX: 4f);
+                new Vector3(6f, 4f, 6f), isStart: true, spawnX: 4f);
             SolidBox(ctx.Group("7.1 Bay"), "Sill", new Vector3(11.5f, 0.5f, 0f), new Vector3(1f, 1f, 5f), metal);
             Zone(ctx, "Bay Lift Field", 0, new Vector3(13f, 2.3f, 0f), new Vector3(10f, 4.6f, 5f), GravityMode.Down,
                 new[] { GravityMode.Down, GravityMode.Zero }, players: false,
                 arrows: new[] { new Vector3(9f, 3.8f, -1.9f), new Vector3(17f, 3.8f, -1.9f) });
             Hint(ctx, "7.1  Engine Handling",
-                "Carry the engine together: each of you walk to one end of the stretcher and it lifts. Stay side by side — too far apart, too close or tilted and it slips!",
+                "The new engine comes in two halves. Walk up to yours to pick it up — A takes the orange half, B the cyan one — and carry it in your hands back to the ship.",
                 new Vector3(4.5f, 1.5f, 0f), new Vector3(2f, 4f, 6f), 9f);
             Hint(ctx, "The Sill",
-                "Jump the sill together while carrying — or A zeroes the field so it floats, and B freezes it and steers it over.",
+                "Jump the sill and the gap behind it — your engine half stays in your hands.",
                 new Vector3(8f, 1.5f, 0f), new Vector3(1.2f, 4f, 6f), 10f);
 
             // ---------- 7.2 Collapsing Cargo Bridge ----------
@@ -102,16 +57,15 @@ namespace BorrowGravity.EditorTools
             var tpd = collTrig.AddComponent<TimedPowerDown>();
             tpd.section = 1;
             tpd.platforms = collapse.ToArray();
-            tpd.triggeredByCarrier = true;
-            tpd.triggeredByPlayers = false;
+            tpd.triggeredByCarrier = false;
+            tpd.triggeredByPlayers = true;
+            tpd.requiredPlayers = 2; // only once both are on the bridge, so nobody is left behind
             tpd.rearm = false;
             tpd.startDelay = 1f;
             tpd.interval = 2.6f;
             tpd.warnTime = 1.4f;
             tpd.warningText = "The bridge is collapsing behind you — push!";
-            var cp36 = Checkpoint(ctx, null, new Vector3(35f, 0f, -1.2f), 1, "Bridge End", new Vector3(4f, 4f, 3f),
-                carrierSpawn: SpawnPoint(ctx, new Vector3(35.6f, 0.06f, 0f)), spawnX: 33.2f);
-            cp36.carrierActivates = true;
+            var cp36 = Checkpoint(ctx, null, new Vector3(35f, 0f, -1.2f), 1, "Bridge End", new Vector3(4f, 4f, 3f), spawnX: 33.2f);
             LaserAt(ctx, "7.2 Bridge", 31.2f, 0f, 3.2f, -1.7f, 1.7f, 1.5f, 2.6f, 0f);
             var plate = Adopt(ctx, ctx.Piece("7.2", "Bridge_Section", 4), "7.2 Bridge", "FloatingBridgePlate");
             plate.transform.SetPositionAndRotation(new Vector3(40.43f, -6.28f, 0f), Quaternion.identity);
@@ -125,16 +79,14 @@ namespace BorrowGravity.EditorTools
                 new[] { GravityMode.Down, GravityMode.Zero }, players: false,
                 arrows: new[] { new Vector3(38.8f, 3.5f, -1.9f), new Vector3(42.4f, 3.5f, -1.9f) });
             Hint(ctx, "7.2  Collapsing Cargo Bridge",
-                "Once the engine is on the bridge it starts collapsing from the back. Carry it across fast — together!",
+                "Once you're both on the bridge it starts collapsing from the back. Run across together — fast!",
                 new Vector3(14.5f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 8f);
             Hint(ctx, "Last Gap",
-                "A: zero the gap field so the bridge plate floats up. B: freeze it level with the deck, then carry the engine across.",
+                "A: zero the gap field so the bridge plate floats up. B: freeze it level with the deck, then cross on it.",
                 new Vector3(36.5f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 9f);
 
             // ---------- 7.3 Falling Cable Trap ----------
-            var cp49 = Checkpoint(ctx, ctx.Piece("7.3", "Checkpoint_Beacon"), new Vector3(46.6f, 0f, -1.6f), 2, "Cable Trap", new Vector3(4f, 4f, 4f),
-                carrierSpawn: SpawnPoint(ctx, new Vector3(45f, 0.06f, 0f)), spawnX: 44.6f);
-            cp49.carrierActivates = true;
+            var cp49 = Checkpoint(ctx, ctx.Piece("7.3", "Checkpoint_Beacon"), new Vector3(46.6f, 0f, -1.6f), 2, "Cable Trap", new Vector3(4f, 4f, 4f), spawnX: 44.6f);
             float[] cableX = { 50f, 56f, 62f };
             float[] offsets = { 0f, 1.5f, 3.0f };
             var w0 = ctx.Piece("7.3", "Warning_Light", 0);
@@ -168,9 +120,7 @@ namespace BorrowGravity.EditorTools
                 new Vector3(47.5f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 9f);
 
             // ---------- 7.4 Rotating Ring Walkway ----------
-            var cp67 = Checkpoint(ctx, null, new Vector3(66f, 0f, -1.5f), 3, "Ring Walkway", new Vector3(4f, 4f, 3.6f),
-                carrierSpawn: SpawnPoint(ctx, new Vector3(67.6f, 0.06f, 0f)), spawnX: 65.6f);
-            cp67.carrierActivates = true;
+            var cp67 = Checkpoint(ctx, null, new Vector3(66f, 0f, -1.5f), 3, "Ring Walkway", new Vector3(4f, 4f, 3.6f), spawnX: 65.6f);
             Spawn("Platform_Metal_4x4", new Vector3(72.6f, -0.3f, 0f), Vector3.zero, ctx.Group("7.4 Ring"), null, "RingLandingL");
             Spawn("Platform_Metal_4x4", new Vector3(87.4f, -0.3f, 0f), Vector3.zero, ctx.Group("7.4 Ring"), null, "RingLandingR");
             var ring = Adopt(ctx, ctx.Piece("7.4", "Ring_Walkway"), "7.4 Ring", "RingWalkway");
@@ -204,13 +154,11 @@ namespace BorrowGravity.EditorTools
             radial.priority = 1;
             HazardBox(ctx.Group("7.4 Ring"), "RingCore", new Vector3(80f, -10f, 0f), new Vector3(12f, 12f, 8f), HazardEffect.Respawn);
             Hint(ctx, "7.4  Rotating Ring Walkway",
-                "The ring's gravity pulls you onto its surface — walk over the top, dodging the red charged strips as it turns.\nCarry the engine over the top together — or B freezes it (R-Shift with nothing in front) and steers it across.",
+                "The ring's gravity pulls you onto its surface — walk over the top, dodging the red charged strips as it turns.",
                 new Vector3(65.5f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 11f);
 
             // ---------- 7.5 Long Zero-Gravity Gap ----------
-            var cp92 = Checkpoint(ctx, ctx.Piece("7.5", "Checkpoint_Beacon"), new Vector3(90.2f, 0f, -1.4f), 4, "Zero-G Gap", new Vector3(4f, 4f, 3.6f),
-                carrierSpawn: SpawnPoint(ctx, new Vector3(92.5f, 0.06f, 0f)), spawnX: 90f);
-            cp92.carrierActivates = true;
+            var cp92 = Checkpoint(ctx, ctx.Piece("7.5", "Checkpoint_Beacon"), new Vector3(90.2f, 0f, -1.4f), 4, "Zero-G Gap", new Vector3(4f, 4f, 3.6f), spawnX: 90f);
             Remove(ctx.Piece("7.5", "Platform_Metal_4x4"));
             var ferry = Spawn("Platform_Metal_6x3", new Vector3(98.75f, 0f, 0f), Vector3.zero, ctx.Group("7.5 Gap"), null, "Ferry");
             var frb = MakeDynamic(ferry, 20f, RigidbodyConstraints.FreezeRotation, kinematic: true);
@@ -233,18 +181,16 @@ namespace BorrowGravity.EditorTools
             dl.dockPose = dockPose;
             dl.zone = dockZone;
             dl.requiredMode = GravityMode.Up;
-            dl.lockedMessage = "Ferry docked — push the engine off!";
+            dl.lockedMessage = "Ferry docked — hop off!";
             var gap = Zone(ctx, "Zero-G Gap", 4, new Vector3(101.8f, 0f, 0f), new Vector3(12.3f, 20f, 5f), GravityMode.Zero, null,
                 controllable: false, objects: false);
             gap.drawOutline = false;
             Hint(ctx, "7.5  Long Zero-Gravity Gap",
-                "No floor across the gap. Carry the engine onto the ferry. B: freeze the ferry and steer it across. A: switch the landing field UP to lift it into the dock.",
+                "No floor across the gap. Step onto the ferry. B: freeze the ferry and steer it across. A: switch the landing field UP to lift it into the dock.",
                 new Vector3(91f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 11f);
 
             // ---------- 7.6 Final Debris Fall ----------
-            var cp116 = Checkpoint(ctx, null, new Vector3(115.6f, 0.4f, -1.5f), 5, "Debris Fall", new Vector3(3f, 4f, 3.6f),
-                carrierSpawn: SpawnPoint(ctx, new Vector3(117f, 0.46f, 0f)), spawnX: 115.2f);
-            cp116.carrierActivates = true;
+            var cp116 = Checkpoint(ctx, null, new Vector3(115.6f, 0.4f, -1.5f), 5, "Debris Fall", new Vector3(3f, 4f, 3.6f), spawnX: 115.2f);
             var deck = ctx.Group("7.6 Debris");
             SolidBox(deck, "DeckA", new Vector3(118.35f, 0.15f, 0f), new Vector3(7.5f, 0.5f, 3.4f));
             SolidBox(deck, "DeckB", new Vector3(124.35f, -0.05f, 0f), new Vector3(4.5f, 0.5f, 3.4f));
@@ -256,14 +202,12 @@ namespace BorrowGravity.EditorTools
             // a booster up to the high "safe" route over the debris — both must hit it together while carrying
             JumpPadAt(ctx, "7.6 Debris", new Vector3(116.0f, 0.4f, 1.0f), 14f, new Vector3(1.5f, 0f, 0.4f));
             Hint(ctx, "7.6  Final Debris Fall",
-                "The station is coming apart! Red markers show where debris will hit — carry the engine between impacts.",
+                "The station is coming apart! Red markers show where debris will hit — run between impacts.",
                 new Vector3(113.5f, 3f, 0f), new Vector3(1.5f, 4f, 4f), 9f);
 
             // ---------- 7.7 Ship Docking Platform ----------
             Spawn("Platform_Metal_4x4", new Vector3(140f, -0.26f, 0f), Vector3.zero, ctx.Group("7.7 Docking"), null, "DockConnector");
-            var cp140 = Checkpoint(ctx, ctx.Piece("7.7", "Checkpoint_Beacon"), new Vector3(139f, -0.2f, -1.6f), 6, "Docking Platform", new Vector3(3.6f, 4f, 3.6f),
-                carrierSpawn: SpawnPoint(ctx, new Vector3(140f, -0.14f, 0f)), spawnX: 138.6f);
-            cp140.carrierActivates = true;
+            var cp140 = Checkpoint(ctx, ctx.Piece("7.7", "Checkpoint_Beacon"), new Vector3(139f, -0.2f, -1.6f), 6, "Docking Platform", new Vector3(3.6f, 4f, 3.6f), spawnX: 138.6f);
             var dockPlat = Adopt(ctx, ctx.Piece("7.7", "Docking_Platform"), "7.7 Docking", "DetachedDock");
             dockPlat.transform.SetPositionAndRotation(new Vector3(147f, -0.2f, 0f), Quaternion.identity);
             DeckCollider(dockPlat);
@@ -318,9 +262,7 @@ namespace BorrowGravity.EditorTools
                 new Vector3(138.6f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 11f);
 
             // ---------- 7.8 Repair Under Pressure ----------
-            var cp159 = Checkpoint(ctx, null, new Vector3(160f, -0.2f, -2f), 7, "Ship", new Vector3(3f, 4f, 3.6f),
-                carrierSpawn: SpawnPoint(ctx, new Vector3(165.5f, -0.14f, -0.6f)), spawnX: 160.6f);
-            cp159.carrierActivates = true;
+            var cp159 = Checkpoint(ctx, null, new Vector3(160f, -0.2f, -2f), 7, "Ship", new Vector3(3f, 4f, 3.6f), spawnX: 160.6f);
             var shipDock = ctx.Piece("7.8", "Docking_Platform");
             shipDock.transform.position = new Vector3(164f, -0.2f, 0f);
             DeckCollider(shipDock);
@@ -329,17 +271,17 @@ namespace BorrowGravity.EditorTools
             NoColliders(ship);
             var bayPad = Spawn("GravityZone_Pad", new Vector3(162f, -0.2f, 0.4f), Vector3.zero, ctx.Group("7.8 Ship"), null, "EngineBayPad");
             NoColliders(bayPad);
-            var bayTrig = TriggerBox(ctx.Group("7.8 Ship"), "EngineBay", new Vector3(162f, 1.2f, 0.4f), new Vector3(0.8f, 2.4f, 0.8f));
-            var bay = bayTrig.AddComponent<Socket>();
-            bay.section = 7;
-            bay.key = "engine";
-            bay.maxSpeed = 1f;
+            var bayTrig = TriggerBox(ctx.Group("7.8 Ship"), "EngineBay", new Vector3(162f, 1.2f, 0.4f), new Vector3(2.2f, 2.4f, 2.2f));
+            var bay = bayTrig.AddComponent<EngineBay>();
             bay.indicator = bayPad.GetComponent<Renderer>();
-            bay.acceptedMessage = "Engine seated in the bay!";
-            var baySnap = new GameObject("Snap").transform;
-            baySnap.SetParent(bayTrig.transform, false);
-            baySnap.position = new Vector3(162f, -0.14f, 0.4f);
-            bay.snapPoint = baySnap;
+            bay.slots = new Transform[2];
+            for (int i = 0; i < 2; i++)
+            {
+                var slot = new GameObject(i == 0 ? "SlotA" : "SlotB").transform;
+                slot.SetParent(bayTrig.transform, false);
+                slot.position = new Vector3(i == 0 ? 161.5f : 162.5f, 0.1f, 0.4f);
+                bay.slots[i] = slot;
+            }
             var lockA = LockPad(ctx, new Vector3(159.9f, -0.2f, -1.7f), ctx.Piece("7.8", "Warning_Light", 0));
             var lockB = LockPad(ctx, new Vector3(168.1f, -0.2f, -1.7f), ctx.Piece("7.8", "Warning_Light", 1));
             var shipZone = Zone(ctx, "Ship Gravity Field", 7, new Vector3(164f, 2.5f, 0f), new Vector3(10f, 5f, 5f), GravityMode.Down,
@@ -358,7 +300,7 @@ namespace BorrowGravity.EditorTools
             timer.duration = 75f;
             timer.successSignal = final;
             timer.label = "STATION COLLAPSE";
-            timer.startMessage = "The station is breaking apart! Seat the engine, keep gravity DOWN and hit both locks!";
+            timer.startMessage = "The station is breaking apart! Install both engine halves, keep gravity DOWN and hit both locks!";
             timer.successMessage = "Engine locked in — ignition!";
             var glitch = shipZone.gameObject.AddComponent<ZoneGlitcher>();
             glitch.zone = shipZone;
@@ -366,9 +308,9 @@ namespace BorrowGravity.EditorTools
             var goal = TriggerBox(ctx.Group("7.8 Ship"), "ShipGoal", new Vector3(164f, 1.5f, -0.5f), new Vector3(10f, 3f, 5f));
             var gt = goal.AddComponent<GoalTrigger>();
             gt.extraCondition = final;
-            gt.waitingForCondition = "Seat the engine, keep gravity DOWN and stand on both locks!";
+            gt.waitingForCondition = "Install both engine halves, keep gravity DOWN and stand on both locks!";
             Hint(ctx, "7.8  Repair Under Pressure",
-                "Final repair! Carry the engine onto the glowing bay to seat it. A: keep the ship's gravity field on DOWN. Then both stand on the lock pads!",
+                "Final repair! Each of you walk into the glowing bay to install your engine half. A: keep the ship's gravity field on DOWN. Then both stand on the lock pads!",
                 new Vector3(159.2f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 11f);
 
             // ---------- walls ----------
@@ -389,15 +331,34 @@ namespace BorrowGravity.EditorTools
             Astronaut(ctx, 0, start.GetSpawn(0));
             Astronaut(ctx, 1, start.GetSpawn(1));
             CoreObjects(ctx, 3, "STAGE 3 — ENGINE RUN: THE COLLAPSING RETURN", HudObjective.ReturnToShip, "Return to the Ship",
-                "The station is tearing itself apart. Carry the replacement engine together all the way back to your ship — " +
-                "across collapsing bridges, falling cables and a gravity ring.\n\nKeep it level: tilting or hard landings shake the engine loose.",
+                "The station is tearing itself apart. The new engine comes in two halves — each of you carries one in your hands, " +
+                "all the way back to your ship: across collapsing bridges, falling cables and a gravity ring.\n\nBoth halves must be installed to fly home.",
                 "ENGINE ONLINE",
                 "The new engine roars to life. With the station collapsing behind you, the ship breaks free and turns for home.\n\nThanks for playing BORROWED GRAVITY!",
                 -25f, final: true,
                 times: new[] { TimeOfDay.At(TimeOfDay.Night(), 0f), TimeOfDay.At(TimeOfDay.Night(), 0.7f), TimeOfDay.At(TimeOfDay.Dawn(), 1f) },
                 routeStartX: 0f, routeEndX: 165f);
-            foreach (var c in ctx.cameras) c.extraTarget = carrier.transform;
             Save(ctx, ScenePath);
+        }
+
+        /// <summary>One engine half on the bay floor: A's is orange, B's is cyan; the owner walks up to it to pick it up.</summary>
+        static void EngineHalf(StageContext ctx, int owner, GameObject existingCore, Vector3 at)
+        {
+            var root = new GameObject(owner == 0 ? "EngineHalf_A" : "EngineHalf_B");
+            root.transform.SetParent(ctx.Group("Engine"), false);
+            root.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, 90f, 0f));
+            var mesh = existingCore != null ? Adopt(ctx, existingCore, "Engine") : Spawn("Engine_Core", at, Vector3.zero, ctx.Group("Engine"));
+            mesh.name = "Core";
+            mesh.transform.SetParent(root.transform, false);
+            mesh.transform.localPosition = new Vector3(0f, -0.25f, 0f);
+            mesh.transform.localRotation = Quaternion.identity;
+            mesh.transform.localScale = Vector3.one * 0.45f;
+            NoColliders(root);
+            Color c = owner == 0 ? new Color(1f, 0.62f, 0.36f) : new Color(0.36f, 0.88f, 1f);
+            PointLight(root.transform, at + Vector3.up * 0.6f, c, 3.5f, 2.2f);
+            var part = root.AddComponent<EnginePart>();
+            part.owner = owner;
+            part.displayName = owner == 0 ? "orange engine half" : "cyan engine half";
         }
 
         static Transform SpawnPoint(StageContext ctx, Vector3 at)

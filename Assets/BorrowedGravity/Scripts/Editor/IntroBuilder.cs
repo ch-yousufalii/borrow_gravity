@@ -127,16 +127,34 @@ namespace BorrowGravity.EditorTools
             Move(cs, b, 28.7f, 2f, new Vector3(5.6f, 0.92f, -0.6f), new Vector3(3.7f, 0.92f, 0f), new Vector3(0, 70, 0), new Vector3(0, 90, 0), true);
 
             // ---------- dialogue ----------
-            Line(cs, 1.5f, 4.2f, "", Narrator, "Somewhere in the Shattered Orbit, a small cargo ship limps home...");
-            Line(cs, 8.6f, 2.2f, "A", ColA, "What was that?!");
-            Line(cs, 10.9f, 2.6f, "B", ColB, "The engine's gone critical — hold on, we're going down!");
-            Line(cs, 14.2f, 3.6f, "", Narrator, "Emergency landing on a broken launch platform.");
+            Line(cs, 1.5f, 3.2f, "", Narrator, "Somewhere in the Shattered Orbit, a small cargo ship limps home...");
+            Line(cs, 5.0f, 2.0f, "A", ColA, "Six more hours and we're home.");
+            Line(cs, 7.1f, 1.2f, "B", ColB, "Don't jinx it—");
+            Line(cs, 8.6f, 1.9f, "A", ColA, "What was that?!");
+            Line(cs, 10.7f, 2.4f, "B", ColB, "Engine core's overheating — we're losing thrust!");
+            Line(cs, 13.2f, 2.6f, "A", ColA, "There's a platform below. I'm bringing us down!");
+            Line(cs, 16.1f, 1.6f, "B", ColB, "Brace! Brace!");
             Line(cs, 20.2f, 2.4f, "A", ColA, "Everyone in one piece? ...Good.");
-            Line(cs, 22.8f, 2.8f, "B", ColB, "The engine core is fried. Help me pull it out.");
-            Line(cs, 25.7f, 2.2f, "A", ColA, "On three — push!");
-            Line(cs, 28.4f, 2.8f, "B", ColB, "No spare on board... but the scanner found one.");
-            Line(cs, 31.3f, 2.6f, "A", ColA, "In that abandoned station. Across all of that wreckage.");
-            Line(cs, 33.9f, 2.4f, "B", ColB, "You bend the gravity, I'll hold things still. Let's go.");
+            Line(cs, 22.8f, 2.8f, "B", ColB, "The core is fried. Help me pull it out before it blows.");
+            Line(cs, 25.7f, 1.6f, "A", ColA, "On three — push!");
+            Line(cs, 27.5f, 2.6f, "B", ColB, "No spare on board... but the scanner found one.");
+            Line(cs, 30.2f, 2.6f, "A", ColA, "In that abandoned station? Across all of that wreckage?");
+            Line(cs, 32.9f, 2.0f, "B", ColB, "You bend the gravity, I'll hold things still.");
+            Line(cs, 35.0f, 1.6f, "A", ColA, "Then let's go. Together.");
+
+            // ---------- cinematic sound ----------
+            Cue(cs, 0.3f, CueType.Sound, null, 0.6f, SfxId.Whoosh);
+            Cue(cs, 6.6f, CueType.Sound, null, 0.45f, SfxId.Whoosh);
+            Cue(cs, 8.0f, CueType.Sound, null, 1f, SfxId.Boom);
+            Cue(cs, 10.4f, CueType.Sound, null, 0.8f, SfxId.Rumble);
+            Cue(cs, 13.4f, CueType.Sound, null, 0.7f, SfxId.Whoosh);
+            Cue(cs, 16.6f, CueType.Sound, null, 0.6f, SfxId.Rumble);
+            Cue(cs, 18.0f, CueType.Sound, null, 1f, SfxId.Boom);
+            Cue(cs, 26.2f, CueType.Sound, null, 0.5f, SfxId.Whoosh);
+            Cue(cs, 28.0f, CueType.Sound, null, 0.35f, SfxId.Boom);
+            Cue(cs, 31.4f, CueType.Sound, null, 0.45f, SfxId.Whoosh);
+            Cue(cs, 33.0f, CueType.Sound, null, 0.8f, SfxId.Riser);
+            Cue(cs, 36.0f, CueType.Sound, null, 0.75f, SfxId.Boom);
 
             foreach (var c in Object.FindObjectsByType<Collider>(FindObjectsSortMode.None)) Object.DestroyImmediate(c);
             Save(ctx, ScenePath);

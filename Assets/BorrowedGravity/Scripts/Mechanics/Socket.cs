@@ -40,7 +40,18 @@ namespace BorrowGravity
             Refresh();
         }
 
-        void OnTriggerStay(Collider c)
+        // Enter/Exit as well as Stay: a key that comes to rest inside goes to sleep, and sleeping bodies stop
+        // sending OnTriggerStay — the socket must still see it (this kept Stage 1's latch from ever registering)
+        void OnTriggerEnter(Collider c) => Consider(c);
+        void OnTriggerStay(Collider c) => Consider(c);
+
+        void OnTriggerExit(Collider c)
+        {
+            var k = c.GetComponentInParent<SocketKey>();
+            if (k != null && k == candidate) candidate = null;
+        }
+
+        void Consider(Collider c)
         {
             if (filled) return;
             var k = c.GetComponentInParent<SocketKey>();
@@ -50,7 +61,7 @@ namespace BorrowGravity
 
         void FixedUpdate()
         {
-            if (filled || candidate == null) { settled = 0f; candidate = null; return; }
+            if (filled || candidate == null || !candidate.isActiveAndEnabled) { settled = 0f; candidate = null; return; }
             var rb = candidate.GetComponent<Rigidbody>();
             var n = candidate.GetComponent<Nullifiable>();
             bool nullified = n != null && n.IsActive;
@@ -58,7 +69,6 @@ namespace BorrowGravity
             if ((acceptWhileNullified || !nullified) && slow) settled += Time.fixedDeltaTime;
             else settled = 0f;
             if (settled >= settleTime) Fill(candidate);
-            candidate = null;
         }
 
         void Fill(SocketKey k)

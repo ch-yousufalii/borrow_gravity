@@ -3,10 +3,15 @@ using UnityEngine.SceneManagement;
 
 namespace BorrowGravity
 {
-    /// <summary>Scene order and progress (unlocked stages are saved in PlayerPrefs).</summary>
+    /// <summary>
+    /// Level order and progress (unlocked stages are saved in PlayerPrefs). All levels live in one Game scene and are
+    /// switched in place by <see cref="GameStages"/> — only the main menu is a separate scene. If the Game scene is
+    /// missing from the build, the older one-scene-per-level layout is used instead.
+    /// </summary>
     public static class GameFlow
     {
         public const string MenuScene = "MainMenu";
+        public const string GameScene = "Game";
         public const string IntroScene = "Intro";
         public const string OutroScene = "Outro";
         public static readonly string[] StageScenes = { "Stage1", "Stage2", "Stage3" };
@@ -15,62 +20,92 @@ namespace BorrowGravity
         /// <summary>True when a stage was entered from the menu or a previous stage (shows the story intro).</summary>
         public static bool ShowIntro = true;
 
+        /// <summary>The level the Game scene shows when it (re)loads: 0 intro, 1-3 stages, 4 ending.</summary>
+        public static int PendingStage = 1;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            ShowIntro = true;
+            PendingStage = 1;
+        }
+
+        /// <summary>Phones default to 30 fps and dim the screen while you only touch it: run at 60 and stay awake.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void MobileSetup()
+        {
+            if (!Application.isMobilePlatform) return;
+            Application.targetFrameRate = 60;
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
+        }
+
         public static int Unlocked
         {
             get => Mathf.Clamp(PlayerPrefs.GetInt(UnlockKey, 1), 1, StageScenes.Length);
             set { PlayerPrefs.SetInt(UnlockKey, Mathf.Clamp(value, 1, StageScenes.Length)); PlayerPrefs.Save(); }
         }
 
+        static bool SingleScene => Application.CanStreamedLevelBeLoaded(GameScene);
+
         public static void LoadStage(int stage)
         {
-            Time.timeScale = 1f;
             ShowIntro = true;
-            Sfx.StopAllLoops();
-            Load(StageScenes[Mathf.Clamp(stage, 1, StageScenes.Length) - 1]);
+            GoTo(Mathf.Clamp(stage, 1, StageScenes.Length));
         }
 
-        /// <summary>New game: the opening cutscene, which then loads Stage 1.</summary>
-        public static void StartNewGame()
-        {
-            Time.timeScale = 1f;
-            Sfx.StopAllLoops();
-            if (Application.CanStreamedLevelBeLoaded(IntroScene)) Load(IntroScene);
-            else LoadStage(1);
-        }
+        /// <summary>New game: the opening cutscene, which then goes on to Stage 1.</summary>
+        public static void StartNewGame() => GoTo(GameStages.Intro);
 
         /// <summary>Called when the opening cutscene ends: straight into Stage 1 (the cutscene already told the story).</summary>
         public static void AfterIntro()
         {
-            Time.timeScale = 1f;
             ShowIntro = false;
-            Sfx.StopAllLoops();
-            Load(StageScenes[0]);
+            GoTo(1);
         }
 
         /// <summary>Last stage done: the ending cutscene (engine fixed, ship takes off), then the menu.</summary>
-        public static void FinishGame()
-        {
-            Time.timeScale = 1f;
-            Sfx.StopAllLoops();
-            if (Application.CanStreamedLevelBeLoaded(OutroScene)) Load(OutroScene);
-            else Load(MenuScene);
-        }
+        public static void FinishGame() => GoTo(GameStages.Outro);
 
         public static void AfterOutro() => LoadMenu();
 
+        /// <summary>Restart the current stage from scratch (reloads the scene so every puzzle is fresh).</summary>
         public static void ReloadStage()
         {
-            Time.timeScale = 1f;
             ShowIntro = false;
-            Sfx.StopAllLoops();
+            if (GameStages.Instance != null) PendingStage = GameStages.Instance.Current;
+            Prepare();
             Load(SceneManager.GetActiveScene().name);
         }
 
         public static void LoadMenu()
         {
+            Prepare();
+            Load(MenuScene);
+        }
+
+        /// <summary>Show a level: switched in place when the Game scene is already running, otherwise loads it.</summary>
+        static void GoTo(int level)
+        {
+            if (NetSession.IsClient) return; // the host decides; its choice arrives over the network
+            Prepare();
+            PendingStage = level;
+            if (!SingleScene) { LoadSeparateScene(level); return; }
+            var stages = GameStages.Instance;
+            if (stages != null && SceneManager.GetActiveScene().name == GameScene && stages.Has(level)) stages.Show(level);
+            else Load(GameScene);
+        }
+
+        static void Prepare()
+        {
             Time.timeScale = 1f;
             Sfx.StopAllLoops();
-            Load(MenuScene);
+        }
+
+        static void LoadSeparateScene(int level)
+        {
+            if (level == GameStages.Intro) Load(Application.CanStreamedLevelBeLoaded(IntroScene) ? IntroScene : StageScenes[0]);
+            else if (level == GameStages.Outro) Load(Application.CanStreamedLevelBeLoaded(OutroScene) ? OutroScene : MenuScene);
+            else Load(StageScenes[level - 1]);
         }
 
         /// <summary>

@@ -22,7 +22,8 @@ namespace BorrowGravity
         static readonly HashSet<string> ClientKeeps = new HashSet<string>
         {
             nameof(PlayerController), nameof(GameUI), nameof(CoopCamera), nameof(VirtualControls), nameof(SuitAnimator),
-            nameof(TimeOfDay), nameof(PlayerCameraLink), nameof(StageManager), nameof(NetWorld), nameof(GravityZone)
+            nameof(TimeOfDay), nameof(PlayerCameraLink), nameof(StageManager), nameof(NetWorld), nameof(GravityZone),
+            nameof(Cutscene), nameof(GameStages), nameof(StageRoot), nameof(InfoBoard)
         };
 
         readonly List<Transform> list = new List<Transform>();
@@ -65,6 +66,7 @@ namespace BorrowGravity
                 foreach (var t in root.GetComponentsInChildren<Transform>(true))
                 {
                     if (t.GetComponentInParent<Camera>(true) != null) continue;
+                    if (t.GetComponentInParent<InfoBoard>(true) != null) continue; // each device turns its boards to its own camera
                     indexOf[t] = list.Count;
                     list.Add(t);
                 }
@@ -108,6 +110,13 @@ namespace BorrowGravity
             if (renderers[i] != null && renderers[i].enabled) f |= 2;
             if (lights[i] != null && lights[i].enabled) f |= 4;
             return f;
+        }
+
+        /// <summary>A new level came on inside the same scene: its players have their own cameras to set up.</summary>
+        public void OnStageShown()
+        {
+            targets.Clear();
+            SetupScreens();
         }
 
         /// <summary>One player per phone: this phone's camera fills the screen, the other one is switched off.</summary>
@@ -290,6 +299,7 @@ namespace BorrowGravity
             w.Write(e != null ? e.SignedTilt : 0f);
             w.Write(e != null ? e.tiltLimit : 30f);
             w.Write(GameUI.CountdownLeft);
+            w.Write((byte)GameUI.PartsMask());
 
             for (int p = 0; p < 2; p++)
             {
@@ -377,6 +387,7 @@ namespace BorrowGravity
             NetHud.engineSignedTilt = r.ReadSingle();
             NetHud.engineTiltLimit = r.ReadSingle();
             NetHud.countdownLeft = r.ReadSingle();
+            NetHud.partsMask = r.ReadByte();
 
             for (int p = 0; p < 2; p++)
             {

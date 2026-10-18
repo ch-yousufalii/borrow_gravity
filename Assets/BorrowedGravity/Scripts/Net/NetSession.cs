@@ -201,7 +201,8 @@ namespace BorrowGravity
         static void OnSceneLoaded(Scene s, LoadSceneMode mode)
         {
             ApplyingRemote = false;
-            if (Online && UnityEngine.Object.FindFirstObjectByType<StageManager>() != null) NetWorld.Setup(s);
+            // single Game scene: GameStages sets the world up when it shows a stage; separate stage scenes: here
+            if (Online && NetWorld.Instance == null && UnityEngine.Object.FindFirstObjectByType<StageManager>() != null) NetWorld.Setup(s);
         }
 
         void Update()
@@ -279,6 +280,7 @@ namespace BorrowGravity
                             // already in a stage (the other phone rejoined)? send it there
                             var active = SceneManager.GetActiveScene().name;
                             if (active != GameFlow.MenuScene) SendScene(active, GameFlow.ShowIntro);
+                            if (GameStages.Instance != null) SendStage(GameStages.Instance.Current, GameFlow.ShowIntro);
                         }
                         return;
                     }
@@ -328,6 +330,16 @@ namespace BorrowGravity
                     SceneManager.LoadScene(scene);
                     break;
                 }
+                case NetMsg.Stage:
+                {
+                    int stage = r.ReadInt32();
+                    GameFlow.ShowIntro = r.ReadBoolean();
+                    GameFlow.PendingStage = stage;
+                    // already in the Game scene: switch now; otherwise the scene shows it when it finishes loading
+                    var gs = GameStages.Instance;
+                    if (!ApplyingRemote && gs != null && SceneManager.GetActiveScene().name == GameFlow.GameScene) gs.Show(stage);
+                    break;
+                }
                 case NetMsg.World: NetWorld.Instance?.ReadWorld(r); break;
                 case NetMsg.Hud: NetWorld.Instance?.ReadHud(r); break;
                 case NetMsg.Spawn: NetWorld.Instance?.ReadSpawn(r); break;
@@ -374,6 +386,9 @@ namespace BorrowGravity
             writer.Write((byte)((jump ? 1 : 0) | (power ? 2 : 0)));
             writer.Write(lJumpCount);
             writer.Write(lPowerCount);
+            // B's stick is relative to B's own camera on this phone: tell the host which way it faces
+            Vector3 view = b != null && b.ViewCamera != null ? b.ViewCamera.transform.forward : Vector3.zero;
+            writer.Write(view.x); writer.Write(view.y); writer.Write(view.z);
             SendTo(peer);
         }
 
@@ -405,6 +420,12 @@ namespace BorrowGravity
             rJumpCount = jc;
             rPowerCount = pc;
             gotInput = true;
+            if (r.BaseStream.Position + 12 <= r.BaseStream.Length)
+            {
+                var view = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                var b = Players.Get(1);
+                if (b != null) b.RemoteViewForward = view;
+            }
         }
 
         static bool lastJumpOut, lastPowerOut;
@@ -452,6 +473,16 @@ namespace BorrowGravity
             if (!IsHost || !Connected) return;
             Write(NetMsg.Scene);
             writer.Write(scene);
+            writer.Write(showIntro);
+            SendTo(peer);
+        }
+
+        /// <summary>Host: a level was switched inside the Game scene.</summary>
+        public static void SendStage(int stage, bool showIntro)
+        {
+            if (!IsHost || !Connected) return;
+            Write(NetMsg.Stage);
+            writer.Write(stage);
             writer.Write(showIntro);
             SendTo(peer);
         }

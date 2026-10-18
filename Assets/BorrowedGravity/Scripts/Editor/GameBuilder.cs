@@ -27,7 +27,7 @@ namespace BorrowGravity.EditorTools
             AddScenes();
             AssetDatabase.SaveAssets();
             EditorSceneManager.OpenScene(MenuPath);
-            Debug.Log("[BorrowGravity] Built MainMenu, Intro, Stage1, Stage2, Stage3, Outro and updated Build Settings.");
+            Debug.Log("[BorrowGravity] Built MainMenu and all levels, combined them into the Game scene and updated Build Settings.");
         }
 
         [MenuItem("BorrowGravity/Build Main Menu", priority = 20)]
@@ -48,7 +48,13 @@ namespace BorrowGravity.EditorTools
         [MenuItem("BorrowGravity/Build Stage 3", priority = 23)]
         static void S3() { if (CanBuild()) { Stage3Builder.Build(); AddScenes(); } }
 
-        static void AddScenes() => SetBuildScenes(MenuPath, IntroBuilder.ScenePath, Stage1Builder.ScenePath, Stage2Builder.ScenePath, Stage3Builder.ScenePath, OutroBuilder.ScenePath);
+        /// <summary>Re-combine the levels into the single Game scene; the build then holds only MainMenu and Game.</summary>
+        static void AddScenes()
+        {
+            GameSceneBuilder.Build();
+            SetBuildScenes(new[] { MenuPath, GameSceneBuilder.ScenePath },
+                IntroBuilder.ScenePath, Stage1Builder.ScenePath, Stage2Builder.ScenePath, Stage3Builder.ScenePath, OutroBuilder.ScenePath);
+        }
 
         static bool CanBuild()
         {

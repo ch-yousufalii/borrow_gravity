@@ -133,6 +133,9 @@ namespace BorrowGravity
         /// <summary>Online: the keyboard only drives this device's own player (the other one is driven over the network).</summary>
         bool KeyboardDrives => !NetSession.Online || playerIndex == NetSession.LocalPlayer;
 
+        /// <summary>Online each device has one player, so the other player's keys (arrows / R-Ctrl / R-Shift) work too.</summary>
+        PlayerKeys AltKeys => NetSession.Online && playerIndex == NetSession.LocalPlayer ? Players.Get(1 - playerIndex)?.keys : null;
+
         /// <summary>Joining phone: the host simulates this player; mirror its pose flags for the suit animation.</summary>
         public void SetRemoteFlags(bool pushing, bool carrying)
         {
@@ -150,37 +153,40 @@ namespace BorrowGravity
                 RawMove = Vector2.zero;
                 return;
             }
-            RawMove = Vector2.ClampMagnitude((KeyboardDrives ? keys.ReadMove() : Vector2.zero) + VirtualInput.Move(playerIndex), 1f);
+            var alt = AltKeys;
+            RawMove = Vector2.ClampMagnitude((KeyboardDrives ? keys.ReadMove() : Vector2.zero) + (alt != null ? alt.ReadMove() : Vector2.zero)
+                                             + VirtualInput.Move(playerIndex), 1f);
             // age the buffer before (re)filling it, so a long frame can't eat a press before FixedUpdate sees it
             jumpBuffer -= Time.deltaTime;
-            if (!MovementLocked && ((KeyboardDrives && keys.JumpPressed()) || VirtualInput.JumpPressed(playerIndex))) jumpBuffer = jumpBufferTime;
+            if (!MovementLocked && ((KeyboardDrives && keys.JumpPressed()) || (alt != null && alt.JumpPressed()) || VirtualInput.JumpPressed(playerIndex)))
+                jumpBuffer = jumpBufferTime;
         }
 
         // power button state from keyboard or on-screen controls
-        public bool PowerPressed() => InputEnabled && ((KeyboardDrives && keys.PowerPressed()) || VirtualInput.PowerPressed(playerIndex));
-        public bool PowerHeld() => InputEnabled && ((KeyboardDrives && keys.PowerHeld()) || VirtualInput.PowerHeld(playerIndex));
-        public bool PowerReleased() => (KeyboardDrives && keys.PowerReleased()) || VirtualInput.PowerReleased(playerIndex);
+        public bool PowerPressed() => InputEnabled && ((KeyboardDrives && keys.PowerPressed()) || (AltKeys?.PowerPressed() ?? false) || VirtualInput.PowerPressed(playerIndex));
+        public bool PowerHeld() => InputEnabled && ((KeyboardDrives && keys.PowerHeld()) || (AltKeys?.PowerHeld() ?? false) || VirtualInput.PowerHeld(playerIndex));
+        public bool PowerReleased() => (KeyboardDrives && keys.PowerReleased()) || (AltKeys?.PowerReleased() ?? false) || VirtualInput.PowerReleased(playerIndex);
 
         /// <summary>The camera that shows this player (its own split-screen camera when there is one).</summary>
         public Camera ViewCamera { get; set; }
 
-        /// <summary>Camera-relative movement axes on the plane perpendicular to "up".</summary>
+        /// <summary>Host, online: the direction the other phone's camera faces for this player (its stick is relative to it).</summary>
+        public Vector3 RemoteViewForward { get; set; }
+
+        /// <summary>
+        /// Camera-relative movement axes on the plane perpendicular to "up": forward is where the (third-person) camera
+        /// looks, right is to its side — on floors, walls and ceilings alike.
+        /// </summary>
         public void GetMoveAxes(Vector3 up, out Vector3 right, out Vector3 forward)
         {
-            Vector3 camRight = cam != null ? cam.transform.right : Vector3.right;
-            Vector3 camFwd = cam != null ? cam.transform.forward : Vector3.forward;
+            Vector3 camFwd = cam != null ? cam.transform.forward : Vector3.right;
+            if (NetSession.IsHost && playerIndex != NetSession.LocalPlayer && RemoteViewForward.sqrMagnitude > 0.01f) camFwd = RemoteViewForward;
             Vector3 camUp = cam != null ? cam.transform.up : Vector3.up;
-            Vector3 screenAxis = Vector3.forward; // the camera looks along +Z
-
-            right = Vector3.Cross(up, screenAxis);
-            if (right.sqrMagnitude < 0.04f) right = Vector3.ProjectOnPlane(camRight, up);
-            right.Normalize();
-            if (Vector3.Dot(right, camRight) < -0.5f) right = -right;
-
             forward = Vector3.ProjectOnPlane(camFwd, up);
-            if (forward.sqrMagnitude < 0.36f) forward = Vector3.ProjectOnPlane(camUp, up);
+            // camera looking straight along "up" (e.g. just after a gravity flip): use its up vector instead
+            if (forward.sqrMagnitude < 0.04f) forward = Vector3.ProjectOnPlane(camUp, up);
             forward.Normalize();
-            forward = Vector3.ProjectOnPlane(forward, right).normalized;
+            right = Vector3.Cross(up, forward).normalized;
         }
 
         void FixedUpdate()
