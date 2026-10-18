@@ -6,10 +6,12 @@ namespace BorrowGravity
     public enum SfxId
     {
         Jump, Hit, Respawn, Checkpoint, GravityShift, Nullify, Release, Denied, Warning, Alarm,
-        Crack, Impact, Door, Plate, Success, Tick, Creak, Spark
+        Crack, Impact, Door, Plate, Success, Tick, Creak, Spark,
+        // cinematic (cutscenes)
+        Whoosh, Boom, Rumble, Riser, Comms
     }
 
-    public enum LoopId { Ambience, EngineHum, Alarm }
+    public enum LoopId { Ambience, EngineHum, Alarm, Drone }
 
     /// <summary>
     /// Procedurally synthesised sound effects (the jam has no audio assets). Clips are generated once on demand.
@@ -182,6 +184,70 @@ namespace BorrowGravity
                     break;
                 case SfxId.Tick:
                     d = Buf(0.05f); Tone(d, 0, 0.05f, 1300, 1300, 0.25f, 12f); break;
+                case SfxId.Whoosh:
+                {
+                    // filtered noise sweeping up then away, with a doppler-ish tone underneath
+                    d = Buf(1.2f);
+                    float lp = 0f;
+                    for (int i = 0; i < d.Length; i++)
+                    {
+                        float t = (float)i / Rate, k = t / 1.2f;
+                        float env = Mathf.Sin(Mathf.PI * Mathf.Pow(k, 0.7f));
+                        float cut = Mathf.Lerp(0.02f, 0.35f, Mathf.Sin(Mathf.PI * k));
+                        lp += (Noise() - lp) * cut;
+                        d[i] = lp * env * 1.6f + 0.12f * env * Mathf.Sin(2 * Mathf.PI * Mathf.Lerp(220f, 90f, k) * t);
+                    }
+                    break;
+                }
+                case SfxId.Boom:
+                {
+                    // deep cinematic hit: sub drop + noise body + long tail
+                    d = Buf(2.6f);
+                    float lp = 0f;
+                    for (int i = 0; i < d.Length; i++)
+                    {
+                        float t = (float)i / Rate;
+                        float sub = Mathf.Sin(2 * Mathf.PI * (55f * t - 18f * t * t)) * Mathf.Exp(-t * 1.6f);
+                        lp += (Noise() - lp) * Mathf.Lerp(0.25f, 0.02f, Mathf.Clamp01(t * 2f));
+                        d[i] = sub * 0.9f + lp * Mathf.Exp(-t * 2.2f) * 1.4f;
+                    }
+                    break;
+                }
+                case SfxId.Rumble:
+                {
+                    d = Buf(2.2f);
+                    float lp = 0f;
+                    for (int i = 0; i < d.Length; i++)
+                    {
+                        float t = (float)i / Rate, k = t / 2.2f;
+                        lp += (Noise() - lp) * 0.015f;
+                        float env = Mathf.Sin(Mathf.PI * k);
+                        d[i] = (lp * 6f + 0.3f * Mathf.Sin(2 * Mathf.PI * 38f * t)) * env * (0.7f + 0.3f * Mathf.Sin(2 * Mathf.PI * 7f * t));
+                    }
+                    break;
+                }
+                case SfxId.Riser:
+                {
+                    // rising tension: detuned saws gliding up + noise swell, cut off at the top
+                    d = Buf(3f);
+                    float lp = 0f, p1 = 0f, p2 = 0f;
+                    for (int i = 0; i < d.Length; i++)
+                    {
+                        float t = (float)i / Rate, k = t / 3f;
+                        float f = Mathf.Lerp(110f, 660f, k * k);
+                        p1 += f / Rate; p2 += f * 1.01f / Rate;
+                        float saw = (p1 % 1f) * 2f - 1f + (p2 % 1f) * 2f - 1f;
+                        lp += (Noise() - lp) * Mathf.Lerp(0.02f, 0.4f, k);
+                        float env = k * k * (k < 0.97f ? 1f : (1f - k) / 0.03f);
+                        d[i] = (saw * 0.25f + lp * 0.8f) * env;
+                    }
+                    break;
+                }
+                case SfxId.Comms:
+                    // radio chirp before someone talks
+                    d = Buf(0.22f); Tone(d, 0, 0.06f, 1600, 1600, 0.25f, 3f, 1); Tone(d, 0.08f, 0.06f, 2100, 2100, 0.22f, 3f, 1);
+                    NoiseBurst(d, 0.0f, 0.2f, 0.12f, 6f, 0.9f);
+                    break;
                 case SfxId.Creak:
                     d = Buf(0.7f); Tone(d, 0, 0.7f, 95, 70, 0.3f, 2f, 2); NoiseBurst(d, 0, 0.6f, 0.15f, 2f, 0.02f); break;
                 default: // Spark
@@ -207,6 +273,12 @@ namespace BorrowGravity
                         lp += (Noise() - lp) * 0.01f;
                         s = lp * 2.5f + 0.25f * Mathf.Sin(2 * Mathf.PI * 55f * t) * (0.6f + 0.4f * Mathf.Sin(2 * Mathf.PI * 0.25f * t))
                           + 0.12f * Mathf.Sin(2 * Mathf.PI * 82.5f * t);
+                        break;
+                    case LoopId.Drone:
+                        // low cinematic bed: two slow-beating fifths and a soft filtered air
+                        lp += (Noise() - lp) * 0.004f;
+                        s = 0.35f * Mathf.Sin(2 * Mathf.PI * 49f * t) + 0.3f * Mathf.Sin(2 * Mathf.PI * 49.5f * t)
+                          + 0.18f * Mathf.Sin(2 * Mathf.PI * 73.5f * t) * (0.6f + 0.4f * Mathf.Sin(2 * Mathf.PI * 0.25f * t)) + lp * 3f;
                         break;
                     case LoopId.EngineHum:
                         s = 0.4f * Mathf.Sin(2 * Mathf.PI * 70f * t) + 0.25f * Mathf.Sin(2 * Mathf.PI * 140f * t) * (0.7f + 0.3f * Mathf.Sin(2 * Mathf.PI * 2f * t))

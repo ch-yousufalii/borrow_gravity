@@ -133,12 +133,24 @@ namespace BorrowGravity.EditorTools
             Cue(cs, 19f, CueType.Sound, null, 1f, SfxId.Impact);
 
             // ---------- dialogue ----------
-            Line(cs, 1.6f, 3f, "", Narrator, "Back at the docking platform, with a brand-new engine...");
-            Line(cs, 4.6f, 2.4f, "A", ColA, "Got your half? Don't drop it now...");
-            Line(cs, 7.2f, 2.2f, "B", ColB, "Bay's open — both halves in!");
-            Line(cs, 11.2f, 2.2f, "A", ColA, "Engine's online!");
-            Line(cs, 13.6f, 2.4f, "B", ColB, "Then let's go home. Together.");
-            Line(cs, 20.5f, 4f, "", Narrator, "Two travellers, one borrowed gravity — and a ship that flies again.");
+            Line(cs, 1.6f, 2.9f, "", Narrator, "Back at the docking platform, with a brand-new engine...");
+            Line(cs, 4.7f, 2.1f, "A", ColA, "Got your half? Don't drop it now...");
+            Line(cs, 7.0f, 2.4f, "B", ColB, "Wouldn't dream of it. Bay's open — both halves in!");
+            Line(cs, 9.6f, 1.5f, "A", ColA, "Locking mine in... now!");
+            Line(cs, 11.3f, 2.1f, "B", ColB, "Engine's online! Listen to that hum.");
+            Line(cs, 13.6f, 2.2f, "A", ColA, "Then let's go home. Together.");
+            Line(cs, 16.3f, 2.0f, "B", ColB, "Station's coming apart — punch it!");
+            Line(cs, 20.5f, 3.8f, "", Narrator, "Two travellers, one borrowed gravity — and a ship that flies again.");
+            Line(cs, 24.6f, 2.0f, "A", ColA, "Next time, we bring a spare.");
+
+            // ---------- cinematic sound ----------
+            Cue(cs, 11.0f, CueType.Sound, null, 0.6f, SfxId.Rumble);
+            Cue(cs, 16.0f, CueType.Sound, null, 0.8f, SfxId.Rumble);
+            Cue(cs, 16.2f, CueType.Sound, null, 0.5f, SfxId.Whoosh);
+            Cue(cs, 19.0f, CueType.Sound, null, 1f, SfxId.Boom);
+            Cue(cs, 19.1f, CueType.Sound, null, 0.9f, SfxId.Whoosh);
+            Cue(cs, 24.2f, CueType.Sound, null, 0.7f, SfxId.Riser);
+            Cue(cs, 27.0f, CueType.Sound, null, 0.6f, SfxId.Boom);
 
             foreach (var c in Object.FindObjectsByType<Collider>(FindObjectsSortMode.None)) Object.DestroyImmediate(c);
             Save(ctx, ScenePath);

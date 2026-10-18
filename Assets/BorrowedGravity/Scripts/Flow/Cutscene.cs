@@ -71,7 +71,7 @@ namespace BorrowGravity
         public float handheld = 0.25f;
 
         float t, skip, shakeAmount, shakeUntil, flashUntil;
-        int nextCue;
+        int nextCue, nextLine;
         bool done;
 
         void Start()
@@ -80,6 +80,8 @@ namespace BorrowGravity
             cues.Sort((a, b) => a.time.CompareTo(b.time));
             foreach (var c in cues) if (c.type == CueType.Activate && c.target != null) c.target.SetActive(false);
             Sfx.SetLoop(LoopId.Ambience, true, 0.4f);
+            Sfx.SetLoop(LoopId.Drone, true, 0.3f); // low cinematic bed under the whole cutscene
+            lines.Sort((a, b) => a.time.CompareTo(b.time));
             Apply(0f);
         }
 
@@ -99,6 +101,12 @@ namespace BorrowGravity
             }
             else if (skip >= skipHold || t >= length) { Finish(); return; }
             while (nextCue < cues.Count && cues[nextCue].time <= t) Fire(cues[nextCue++]);
+            // a radio chirp whenever one of the astronauts starts talking
+            while (nextLine < lines.Count && lines[nextLine].time <= t)
+            {
+                if (!string.IsNullOrEmpty(lines[nextLine].speaker)) Sfx.Play(SfxId.Comms, 0.45f, lines[nextLine].speaker == "A" ? 1f : 1.12f);
+                nextLine++;
+            }
             Apply(t);
         }
 
@@ -108,10 +116,13 @@ namespace BorrowGravity
             if (!done) Finish();
         }
 
+        void OnDisable() => Sfx.SetLoop(LoopId.Drone, false);
+
         void Finish()
         {
             done = true;
             Sfx.SetLoop(LoopId.Alarm, false);
+            Sfx.SetLoop(LoopId.Drone, false);
             if (isEnding) GameFlow.AfterOutro();
             else GameFlow.AfterIntro();
         }

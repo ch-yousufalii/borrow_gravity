@@ -4,8 +4,10 @@ using UnityEngine.InputSystem;
 namespace BorrowGravity
 {
     /// <summary>
-    /// Title screen in the sci-fi menu style: a "NEW GAME" tag on a divider, selector rows with arrow boxes
-    /// (stage, mode, opening cutscene) and a bracketed START button. Keyboard (both players' keys) or mouse.
+    /// Title screen in the final menu design (borrowed-gravity-menu.html): white-only outlines over the orbiting scene.
+    /// Brand on the left; on the right a "NEW GAME" pill, selector rows (stage with difficulty pips, mode, opening
+    /// cutscene toggle), START, Controls / Quit and a key-hint footer. Overlays: Controls, Quit confirm, Launching.
+    /// Mode = host or join a room (every player on their own device, full screen). Keyboard, mouse or touch.
     /// </summary>
     public class MainMenu : MonoBehaviour
     {
@@ -17,30 +19,39 @@ namespace BorrowGravity
 
         enum Row { Stage, Mode, Cutscene, Start, Controls, Quit }
         static readonly Row[] Rows = { Row.Stage, Row.Mode, Row.Cutscene, Row.Start, Row.Controls, Row.Quit };
-        static readonly string[] StageNames = { "Shattered Orbit", "Upside-Down Station", "Collapsing Return" };
-        static readonly string[] ModeNames = { "Same screen · 2 players", "Online · Host a room", "Online · Join a room" };
+        enum Overlay { None, Controls, Quit, Launch }
+
+        static readonly (string name, string hint, int diff)[] Stages =
+        {
+            ("1 · Shattered Orbit", "Learn to bend gravity together.", 1),
+            ("2 · Upside-Down Station", "Flip the station, find the engine.", 2),
+            ("3 · Collapsing Return", "Carry the engine home — fast.", 3),
+        };
+        static readonly (string name, string hint)[] Modes =
+        {
+            ("Host a Room", "Create a room · share the 4-digit code."),
+            ("Join a Room", "Enter your partner's room code."),
+        };
         static readonly string[] Keypad = { "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "<" };
 
         int row = (int)Row.Start;
         int stage;
-        int mode;
-
-        /// <summary>No split screen anywhere: every player has their own device (laptop or phone) and full screen, via a room.</summary>
-        static bool PhoneOnly => true;
+        int mode; // 0 host, 1 join
+        bool cutscene = true;
+        Overlay overlay;
         bool joinEntry;
         string joinCode = "";
-        bool cutscene = true;
-        bool showControls;
-        float angle, introFade = 1f;
-
         bool autoStart;
+        float angle, introFade = 1f, toggleAnim = 1f, launchStart;
+        readonly float[] changedAt = new float[Rows.Length];
+        Vector2 lastMouse;
 
         void Start()
         {
             Time.timeScale = 1f;
-            if (NetSession.Online) mode = NetSession.IsHost ? 1 : 2;
-            else if (PhoneOnly) mode = 1;
+            if (NetSession.Online) mode = NetSession.IsHost ? 0 : 1;
             else DevCommandLine();
+            for (int i = 0; i < changedAt.Length; i++) changedAt[i] = -10f;
             Sfx.SetLoop(LoopId.Ambience, true, 0.35f);
         }
 
@@ -53,13 +64,22 @@ namespace BorrowGravity
                 float a = angle * Mathf.Deg2Rad;
                 cam.transform.position = orbitTarget.position + new Vector3(Mathf.Sin(a) * orbitRadius, orbitHeight, -Mathf.Cos(a) * orbitRadius);
                 cam.transform.LookAt(orbitTarget.position + Vector3.up * 2f);
+                // frame the set on the left (under the title) so the menu column on the right sits over open sky
+                cam.transform.position += cam.transform.right * 9f + cam.transform.up * 1.5f;
             }
             introFade = Mathf.MoveTowards(introFade, 0f, Time.deltaTime);
+            toggleAnim = Mathf.MoveTowards(toggleAnim, cutscene ? 1f : 0f, Time.unscaledDeltaTime / 0.2f);
 
-            if (RoomPanelOpen) { RoomKeys(); return; }
-            if (showControls)
+            if (overlay == Overlay.Launch)
             {
-                if (Confirm() || PlayerKeys.Pressed(Key.Escape)) { showControls = false; Sfx.Play(SfxId.Plate, 0.5f); }
+                if (Time.unscaledTime - launchStart > 2.2f) { overlay = Overlay.None; StartGameNow(); }
+                return;
+            }
+            if (RoomPanelOpen) { RoomKeys(); return; }
+            if (overlay != Overlay.None)
+            {
+                if (PlayerKeys.Pressed(Key.Escape)) CloseOverlay();
+                else if (Confirm()) CloseOverlay(); // Back / Stay are the focused buttons
                 return;
             }
             if (PlayerKeys.Pressed(Key.W) || PlayerKeys.Pressed(Key.UpArrow)) Move(-1);
@@ -81,19 +101,12 @@ namespace BorrowGravity
         {
             switch (Rows[row])
             {
-                case Row.Stage:
-                    stage = (stage + d + GameFlow.Unlocked) % GameFlow.Unlocked;
-                    break;
-                case Row.Cutscene:
-                    cutscene = !cutscene;
-                    break;
-                case Row.Mode:
-                    mode = (mode + d + ModeNames.Length) % ModeNames.Length;
-                    if (PhoneOnly && mode == 0) mode = d > 0 ? 1 : 2;
-                    break;
-                default:
-                    return;
+                case Row.Stage: stage = (stage + d + GameFlow.Unlocked) % GameFlow.Unlocked; break;
+                case Row.Mode: mode = (mode + d + Modes.Length) % Modes.Length; break;
+                case Row.Cutscene: cutscene = !cutscene; break;
+                default: return;
             }
+            changedAt[row] = Time.unscaledTime;
             Sfx.Play(SfxId.Tick, 0.6f, 1.2f);
         }
 
@@ -103,67 +116,306 @@ namespace BorrowGravity
             switch (r)
             {
                 case Row.Start:
-                    if (mode == 0) { NetSession.Stop(); StartGame(); }
-                    else if (mode == 1) NetSession.StartHost();
+                    if (mode == 0) NetSession.StartHost();
                     else { joinEntry = true; NetSession.LastError = ""; }
                     break;
-                case Row.Controls:
-                    showControls = true;
-                    break;
-                case Row.Quit:
-                    Application.Quit();
-#if UNITY_EDITOR
-                    UnityEditor.EditorApplication.isPlaying = false;
-#endif
-                    break;
-                default:
-                    Change(1);
-                    break;
+                case Row.Controls: overlay = Overlay.Controls; break;
+                case Row.Quit: overlay = Overlay.Quit; break;
+                default: Change(1); break;
             }
         }
+
+        void CloseOverlay()
+        {
+            overlay = Overlay.None;
+            Sfx.Play(SfxId.Plate, 0.5f);
+        }
+
+        void Quit()
+        {
+            Application.Quit();
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#endif
+        }
+
+        // ---------- drawing ----------
 
         void OnGUI()
         {
             UIKit.Begin();
             float w = UIKit.Width, h = UIKit.Height;
-            UIKit.Shade(0.2f);
+            // fully transparent: white lines and text straight over the orbiting scene (text has a soft shadow)
 
-            // title on the left, menu column on the right — the world shows through, like the reference
-            float cx = w * 0.30f;
-            UIKit.Text(new Rect(cx - 330, 120, 660, 80), "BORROWED <color=#5ce1ff>GRAVITY</color>", UIKit.Style(UIKit.Face.Display, 64, UIKit.Ink, TextAnchor.MiddleCenter));
-            UIKit.Text(new Rect(cx - 330, 196, 660, 24), UIKit.Caps("A two-player co-op gravity adventure"), UIKit.Style(UIKit.Face.Display, 13, UIKit.Dim, TextAnchor.MiddleCenter));
+            bool menuLive = overlay == Overlay.None && !RoomPanelOpen;
+            float pad = Mathf.Clamp(w * 0.05f, 20f, 72f), gap = Mathf.Clamp(w * 0.04f, 16f, 64f);
+            float avail = w - pad * 2f - gap;
+            float leftW = avail * 1.15f / 2.15f, rightW = avail / 2.15f;
 
-            float mx = w * 0.70f, colW = 440f, x0 = mx - colW * 0.5f;
-            float y = 150f;
-            GUI.enabled = !RoomPanelOpen; // the room panel sits on top: don't let taps fall through to the menu
-            UIKit.Divider(x0, x0 + colW, y, 0.5f);
-            UIKit.TagPill(new Vector2(mx - colW * 0.18f, y), "New Game", UIKit.Glow);
+            DrawBrand(pad, pad + 28f, leftW);
+            if (menuLive) DrawPanel(w - pad - Mathf.Min(520f, rightW), Mathf.Min(520f, rightW), h, true);
 
-            y += 34f;
-            int d = UIKit.Selector(new Rect(x0, y, colW, 62), "Stage", $"{stage + 1} · {StageNames[stage]}", Rows[row] == Row.Stage);
-            if (d != 0) { row = (int)Row.Stage; Change(d); }
-            y += 78f;
-            d = UIKit.Selector(new Rect(x0, y, colW, 62), "Mode", ModeNames[mode], Rows[row] == Row.Mode);
-            if (d != 0) { row = (int)Row.Mode; Change(d); }
-            y += 78f;
-            d = UIKit.Selector(new Rect(x0, y, colW, 62), "Opening cutscene", stage == 0 && cutscene ? "On" : "Off", Rows[row] == Row.Cutscene);
-            if (d != 0) { row = (int)Row.Cutscene; Change(d); }
-            y += 96f;
-            string start = mode == 1 ? "Create room" : mode == 2 ? "Join room" : GameFlow.Unlocked > 1 && stage > 0 ? "Continue" : "Start";
-            if (UIKit.Button(new Rect(x0 + 40, y, colW - 80, 56), start, Rows[row] == Row.Start, 22)) { row = (int)Row.Start; Activate(Row.Start); }
-            y += 82f;
-            float half = (colW - 100) * 0.5f;
-            if (UIKit.Button(new Rect(x0 + 40, y, half, 42), "Controls", Rows[row] == Row.Controls, 15)) { row = (int)Row.Controls; Activate(Row.Controls); }
-            if (UIKit.Button(new Rect(x0 + 60 + half, y, half, 42), "Quit", Rows[row] == Row.Quit, 15)) { row = (int)Row.Quit; Activate(Row.Quit); }
-            UIKit.Divider(x0, x0 + colW, y + 70f, 0.3f);
-
-            UIKit.Text(new Rect(0, h - 40, w, 22), "W / S  choose    ·    A / D  change    ·    Space / Enter  confirm", UIKit.Style(UIKit.Face.Body, 14, UIKit.Dim, TextAnchor.MiddleCenter));
             if (!string.IsNullOrEmpty(NetSession.LastError) && !RoomPanelOpen)
-                UIKit.Text(new Rect(0, h - 74, w, 24), NetSession.LastError, UIKit.Style(UIKit.Face.Heavy, 16, UIKit.Danger, TextAnchor.MiddleCenter));
-            GUI.enabled = true;
+                MenuStyle.Text(new Rect(0, h - 44, w, 24), NetSession.LastError, UIKit.Face.Heavy, 14, MenuStyle.W80);
+
             if (RoomPanelOpen) DrawRoom(w, h);
-            if (showControls) DrawControls(w);
+            else if (overlay == Overlay.Controls) DrawControls(w, h);
+            else if (overlay == Overlay.Quit) DrawQuit(w, h);
+            else if (overlay == Overlay.Launch) DrawLaunch(w, h);
             if (introFade > 0f) UIKit.Fill(new Rect(0, 0, w, h), new Color(0, 0, 0, introFade));
+        }
+
+        void DrawBrand(float x, float y, float width)
+        {
+            int size = (int)Mathf.Clamp(UIKit.Width * 0.06f, 40f, 84f);
+            const string a = "BORROWED ", b = "GRAVITY";
+            float wa = MenuStyle.Measure(a, UIKit.Face.Body, size, 0.02f);
+            MenuStyle.Text(new Rect(x, y, width, size * 1.1f), a, UIKit.Face.Body, size, 1f, 0.02f, TextAnchor.UpperLeft);
+            MenuStyle.Text(new Rect(x + wa + size * 0.02f, y, width, size * 1.1f), b, UIKit.Face.Display, size, 1f, 0.02f, TextAnchor.UpperLeft);
+            MenuStyle.Text(new Rect(x, y + size * 1.1f + 14f, width, 18f), "A TWO-PLAYER CO-OP GRAVITY ADVENTURE", UIKit.Face.Heavy, 13, MenuStyle.W50, 0.22f, TextAnchor.UpperLeft);
+        }
+
+        void DrawPanel(float x, float width, float h, bool live)
+        {
+            var e = Event.current;
+            Vector2 mouse = e.mousePosition;
+            bool mouseMoved = (mouse - lastMouse).sqrMagnitude > 0.5f && e.type == EventType.Repaint;
+            if (e.type == EventType.Repaint) lastMouse = mouse;
+
+            // heights from the design: rows 12 padding, start 18, secondary 14
+            float[] heights = { 96f, 80f, 88f, 63f, 45f };
+            float total = 11f + 12f + 18f + heights[0] + heights[1] + heights[2] + 8f * 3f + 14f + heights[3] + 8f + heights[4] + 18f + 14f + 22f;
+            float y = Mathf.Max(24f, (h - total) * 0.5f);
+
+            // head: NEW GAME pill + hairline
+            float pillW = MenuStyle.Measure("NEW GAME", UIKit.Face.Display, 11, 0.3f) + 28f;
+            var pill = new Rect(x, y, pillW, 25f);
+            MenuStyle.Box(pill, 1f, 1f, 12.5f);
+            MenuStyle.Text(pill, "NEW GAME", UIKit.Face.Display, 11, 1f, 0.3f);
+            MenuStyle.Line(pill.xMax + 12f, pill.center.y, width - pillW - 12f, MenuStyle.W25);
+            y += 25f + 18f;
+
+            for (int i = 0; i < 3; i++)
+            {
+                var r = new Rect(x, y, width, heights[i]);
+                DrawSelectRow(i, r, live, mouseMoved);
+                y += heights[i] + 8f;
+            }
+
+            // START
+            y += 14f - 8f + 8f;
+            var start = new Rect(x, y, width, heights[3]);
+            RowFrame(start, (int)Row.Start, true, live, mouseMoved);
+            MenuStyle.Text(start, "START", UIKit.Face.Heavy, 22, 1f, 0.4f);
+            y += heights[3] + 8f;
+
+            // secondary: Controls | Quit
+            float half = (width - 8f) * 0.5f;
+            var ctl = new Rect(x, y, half, heights[4]);
+            var quit = new Rect(x + half + 8f, y, half, heights[4]);
+            RowFrame(ctl, (int)Row.Controls, false, live, mouseMoved);
+            RowFrame(quit, (int)Row.Quit, false, live, mouseMoved);
+            MenuStyle.Text(ctl, "CONTROLS", UIKit.Face.Heavy, 14, 1f, 0.28f);
+            MenuStyle.Text(quit, "QUIT", UIKit.Face.Heavy, 14, 1f, 0.28f);
+            y += heights[4] + 18f;
+
+            // key hints
+            MenuStyle.Line(x, y, width, MenuStyle.W25);
+            y += 14f + 11f;
+            DrawKeyHints(x, width, y);
+        }
+
+        /// <summary>Row outline: hover/active border, corner brackets when active; hover selects, click confirms.</summary>
+        void RowFrame(Rect r, int index, bool isStart, bool live, bool mouseMoved)
+        {
+            var e = Event.current;
+            bool hover = live && r.Contains(e.mousePosition);
+            if (hover && mouseMoved && row != index) { row = index; Sfx.Play(SfxId.Tick, 0.25f); }
+            bool active = row == index;
+            float border = isStart ? MenuStyle.W50 : active ? MenuStyle.W25 : hover ? MenuStyle.W12 : 0f;
+            if (isStart && active) border = MenuStyle.W50;
+            MenuStyle.Box(r, border, 1f);
+            if (active) MenuStyle.Brackets(r);
+            if (live && hover && e.type == EventType.MouseDown)
+            {
+                e.Use();
+                row = index;
+                Activate(Rows[index]);
+            }
+        }
+
+        void DrawSelectRow(int index, Rect r, bool live, bool mouseMoved)
+        {
+            var e = Event.current;
+            // arrows first, so their clicks win over the row's click
+            var left = new Rect(r.x + 12f, r.center.y - 16f, 32f, 32f);
+            var right = new Rect(r.xMax - 44f, r.center.y - 16f, 32f, 32f);
+            foreach (var (box, d) in new[] { (left, -1), (right, 1) })
+            {
+                bool over = live && box.Contains(e.mousePosition);
+                if (over) UIKit.Fill(box, MenuStyle.White(MenuStyle.W12));
+                MenuStyle.Box(box, MenuStyle.W50, 1f);
+                MenuStyle.Text(box, d < 0 ? "‹" : "›", UIKit.Face.Heavy, 18, 1f, 0f, TextAnchor.MiddleCenter, -1f);
+                if (over && e.type == EventType.MouseDown) { e.Use(); row = index; Change(d); }
+            }
+            RowFrame(r, index, false, live, mouseMoved);
+
+            var mid = new Rect(left.xMax + 10f, r.y + 12f, right.x - left.xMax - 20f, r.height - 24f);
+            string label = index == 0 ? "STAGE" : index == 1 ? "MODE" : "OPENING CUTSCENE";
+            MenuStyle.Text(new Rect(mid.x, mid.y, mid.width, 12f), label, UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperCenter);
+
+            // the value slides in when it changes
+            float k = Mathf.Clamp01((Time.unscaledTime - changedAt[index]) / 0.2f);
+            k = 1f - (1f - k) * (1f - k);
+            string value = index == 0 ? Stages[stage].name : index == 1 ? Modes[mode].name : cutscene ? "On" : "Off";
+            MenuStyle.Text(new Rect(mid.x, mid.y + 16f, mid.width, 24f), value.ToUpperInvariant(), UIKit.Face.Heavy, 18, k, 0.08f, TextAnchor.UpperCenter, 5f * (1f - k));
+
+            float ey = mid.y + 16f + 24f + 5f;
+            if (index == 0)
+            {
+                MenuStyle.Text(new Rect(mid.x, ey, mid.width, 16f), Stages[stage].hint, UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+                float px = mid.center.x - (3 * 18f + 2 * 4f) * 0.5f;
+                for (int p = 1; p <= 3; p++)
+                {
+                    var pip = new Rect(px + (p - 1) * 22f, ey + 16f + 7f, 18f, 3f);
+                    if (p <= Stages[stage].diff) UIKit.Fill(pip, MenuStyle.White(1f));
+                    else MenuStyle.Box(pip, MenuStyle.W50, 1f);
+                }
+            }
+            else if (index == 1)
+                MenuStyle.Text(new Rect(mid.x, ey, mid.width, 16f), Modes[mode].hint, UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+            else
+            {
+                var tog = new Rect(mid.center.x - 22f, ey + 1f, 44f, 22f);
+                MenuStyle.Box(tog, 1f, 1f, 11f);
+                var knob = new Rect(tog.x + 3f + 22f * toggleAnim, tog.y + 3f, 16f, 16f);
+                if (cutscene) MenuStyle.Box(knob, 1f, 0f, 8f);
+                else MenuStyle.Box(knob, 1f, 1f, 8f);
+            }
+        }
+
+        void DrawKeyHints(float x, float width, float cy)
+        {
+            // measure the three groups, then centre them with 16px between
+            float Group(float gx, string[] keys, string label, bool draw)
+            {
+                float cx = gx;
+                foreach (var k in keys)
+                {
+                    if (draw) cx += MenuStyle.Key(cx, cy, k) + 4f;
+                    else cx += Mathf.Max(24f, MenuStyle.Measure(k, UIKit.Face.Heavy, 11, 0f) + 14f) + 4f;
+                }
+                float lw = MenuStyle.Measure(label, UIKit.Face.Body, 12, 0f);
+                if (draw) MenuStyle.Text(new Rect(cx + 2f, cy - 9f, lw + 4f, 18f), label, UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+                return cx + 2f + lw - gx;
+            }
+            var groups = new (string[] keys, string label)[]
+            {
+                (new[] { "W", "S" }, "choose"), (new[] { "A", "D" }, "change"), (new[] { "Space", "Enter" }, "confirm")
+            };
+            float total = 0f;
+            foreach (var g in groups) total += Group(0f, g.keys, g.label, false);
+            total += 16f * (groups.Length - 1);
+            float gx2 = x + (width - total) * 0.5f;
+            foreach (var g in groups) gx2 += Group(gx2, g.keys, g.label, true) + 16f;
+        }
+
+        // ---------- overlays ----------
+
+        static Rect Modal(float w, float h, float width, float height)
+        {
+            var r = new Rect((w - width) * 0.5f, (h - height) * 0.5f, width, height);
+            MenuStyle.Box(r, 1f, 1f);
+            return r;
+        }
+
+        void DrawControls(float w, float h)
+        {
+            float mw = Mathf.Min(w * 0.92f, 640f);
+            var r = Modal(w, h, mw, 360f);
+            float x = r.x + 26f, y = r.y + 26f, inner = r.width - 52f;
+            MenuStyle.Text(new Rect(x, y, inner, 22f), "CONTROLS", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
+            y += 22f + 16f;
+            float colW = (inner - 16f) * 0.5f;
+            DrawControlCol(new Rect(x, y, colW, 196f), "PLAYER A · HOST", new[]
+            {
+                ("Move", new[] { "W", "A", "S", "D" }), ("Look", new[] { "Mouse" }), ("Jump", new[] { "Space" }), ("Switch gravity", new[] { "E" })
+            });
+            DrawControlCol(new Rect(x + colW + 16f, y, colW, 196f), "PLAYER B · JOINS", new[]
+            {
+                ("Move", new[] { "W", "A", "S", "D" }), ("Look", new[] { "Mouse" }), ("Jump", new[] { "Space" }), ("Freeze · hold: steer", new[] { "E" })
+            });
+            MenuStyle.Text(new Rect(x, r.yMax - 64f, inner, 16f), "Phones: joystick · drag to look · JUMP · POWER     Hold R: checkpoint · Esc: pause",
+                UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+            if (MenuStyle.Button(new Rect(r.xMax - 26f - 96f, r.yMax - 26f - 34f, 96f, 34f), "Back", true)) CloseOverlay();
+        }
+
+        static void DrawControlCol(Rect r, string title, (string label, string[] keys)[] items)
+        {
+            MenuStyle.Box(r, MenuStyle.W25, 1f);
+            MenuStyle.Text(new Rect(r.x + 14f, r.y + 14f, r.width - 28f, 16f), title, UIKit.Face.Display, 13, 1f, 0.2f, TextAnchor.UpperLeft);
+            float y = r.y + 14f + 16f + 10f;
+            for (int i = 0; i < items.Length; i++)
+            {
+                float rowH = 32f;
+                MenuStyle.Text(new Rect(r.x + 14f, y, r.width * 0.55f, rowH), items[i].label, UIKit.Face.Body, 13, MenuStyle.W80, 0f, TextAnchor.MiddleLeft);
+                float kx = r.xMax - 14f;
+                for (int k = items[i].keys.Length - 1; k >= 0; k--)
+                {
+                    float kw = Mathf.Max(24f, MenuStyle.Measure(items[i].keys[k], UIKit.Face.Heavy, 11, 0f) + 14f);
+                    kx -= kw;
+                    MenuStyle.Key(kx, y + rowH * 0.5f, items[i].keys[k]);
+                    kx -= 4f;
+                }
+                if (i < items.Length - 1) MenuStyle.DashedLine(r.x + 14f, r.xMax - 14f, y + rowH, MenuStyle.W25);
+                y += rowH;
+            }
+        }
+
+        void DrawQuit(float w, float h)
+        {
+            var r = Modal(w, h, Mathf.Min(w * 0.92f, 600f), 170f);
+            float x = r.x + 26f, inner = r.width - 52f;
+            MenuStyle.Text(new Rect(x, r.y + 26f, inner, 22f), "QUIT GAME?", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
+            MenuStyle.Text(new Rect(x, r.y + 26f + 22f + 16f, inner, 18f), "Unsaved progress will be lost.", UIKit.Face.Body, 14, MenuStyle.W50, 0f, TextAnchor.UpperLeft);
+            var quit = new Rect(r.xMax - 26f - 96f, r.yMax - 26f - 34f, 96f, 34f);
+            var stay = new Rect(quit.x - 10f - 96f, quit.y, 96f, 34f);
+            if (MenuStyle.Button(stay, "Stay", true)) CloseOverlay();
+            if (MenuStyle.Button(quit, "Quit")) Quit();
+        }
+
+        void DrawLaunch(float w, float h)
+        {
+            float cy = h * 0.5f - 50f;
+            MenuStyle.Text(new Rect(0, cy, w, 12f), "LAUNCHING", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperCenter);
+            MenuStyle.Text(new Rect(0, cy + 18f, w, 36f), Stages[stage].name.ToUpperInvariant(), UIKit.Face.Display, 28, 1f, 0.12f, TextAnchor.UpperCenter);
+            string sub = (NetSession.Online ? (NetSession.IsHost ? "Room " + NetSession.RoomCode + " · Host" : "Room " + NetSession.RoomCode) : Modes[mode].name)
+                         + (stage == 0 ? (cutscene ? " · Cutscene on" : " · Cutscene skipped") : "");
+            MenuStyle.Text(new Rect(0, cy + 62f, w, 18f), sub, UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+            float bw = Mathf.Min(w * 0.7f, 360f);
+            var bar = new Rect((w - bw) * 0.5f, cy + 62f + 18f + 18f, bw, 3f);
+            UIKit.Fill(bar, MenuStyle.White(MenuStyle.W25));
+            float t = Mathf.Clamp01((Time.unscaledTime - launchStart) / 1.8f);
+            t = 1f - (1f - t) * (1f - t); // ease
+            UIKit.Fill(new Rect(bar.x, bar.y, bar.width * t, bar.height), MenuStyle.White(1f));
+        }
+
+        // ---------- starting ----------
+
+        /// <summary>Show "Launching …" with its loading bar, then start.</summary>
+        void StartGame()
+        {
+            if (overlay == Overlay.Launch) return;
+            overlay = Overlay.Launch;
+            launchStart = Time.unscaledTime;
+            joinEntry = false;
+            Sfx.Play(SfxId.Checkpoint, 0.6f);
+        }
+
+        void StartGameNow()
+        {
+            if (stage == 0 && cutscene) GameFlow.StartNewGame();
+            else GameFlow.LoadStage(stage + 1);
         }
 
         /// <summary>Testing two copies on one machine: -bghost [-bgstage N] [-bgnocut] starts a room and the game as soon
@@ -176,25 +428,19 @@ namespace BorrowGravity
                 string next = i + 1 < args.Length ? args[i + 1] : "";
                 switch (args[i])
                 {
-                    case "-bgstage": if (int.TryParse(next, out int st)) stage = Mathf.Clamp(st - 1, 0, StageNames.Length - 1); break;
+                    case "-bgstage": if (int.TryParse(next, out int st)) stage = Mathf.Clamp(st - 1, 0, Stages.Length - 1); break;
                     case "-bgnocut": cutscene = false; break;
-                    case "-bghost": mode = 1; autoStart = true; break;
-                    case "-bgjoin": mode = 2; joinCode = next; break;
+                    case "-bghost": mode = 0; autoStart = true; break;
+                    case "-bgjoin": mode = 1; joinCode = next; break;
                 }
             }
-            if (mode == 1 && autoStart) NetSession.StartHost();
-            if (mode == 2 && joinCode.Length > 0) Connect();
-        }
-
-        void StartGame()
-        {
-            if (stage == 0 && cutscene) GameFlow.StartNewGame();
-            else GameFlow.LoadStage(stage + 1);
+            if (mode == 0 && autoStart) NetSession.StartHost();
+            if (mode == 1 && joinCode.Length > 0) Connect();
         }
 
         // ---------- online room ----------
 
-        bool RoomPanelOpen => joinEntry || NetSession.Online;
+        bool RoomPanelOpen => overlay != Overlay.Launch && (joinEntry || NetSession.Online);
 
         void LeaveRoom()
         {
@@ -234,84 +480,70 @@ namespace BorrowGravity
 
         void DrawRoom(float w, float h)
         {
-            UIKit.Shade(0.72f);
-            var r = new Rect(w * 0.5f - 300, 120, 600, 620);
-            UIKit.Panel(r, true);
-            float cx = r.center.x;
-
             if (joinEntry && !NetSession.Online)
             {
-                UIKit.TagPill(new Vector2(cx, r.y), "Join a room", UIKit.Glow);
-                UIKit.Text(new Rect(r.x, r.y + 34, r.width, 24), "Type the room code shown on your friend's phone", UIKit.Style(UIKit.Face.Body, 16, UIKit.Dim, TextAnchor.MiddleCenter));
-                var field = new Rect(cx - 170, r.y + 70, 340, 64);
-                UIKit.Fill(field, new Color(UIKit.Void.r, UIKit.Void.g, UIKit.Void.b, 0.7f));
-                UIKit.Brackets(field, 14f, 2f, UIKit.Glow);
-                string shown = joinCode.Length > 0 ? joinCode : "····";
-                UIKit.Text(field, shown, UIKit.Style(UIKit.Face.Display, 34, joinCode.Length > 0 ? UIKit.Ink : UIKit.Dim, TextAnchor.MiddleCenter));
+                var r = Modal(w, h, Mathf.Min(w * 0.92f, 520f), 560f);
+                float x = r.x + 26f, inner = r.width - 52f, cx = r.center.x;
+                MenuStyle.Text(new Rect(x, r.y + 26f, inner, 22f), "JOIN A ROOM", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
+                MenuStyle.Text(new Rect(x, r.y + 60f, inner, 18f), "Type the room code shown on your partner's screen.", UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperLeft);
+                var field = new Rect(cx - 150f, r.y + 92f, 300f, 60f);
+                MenuStyle.Box(field, MenuStyle.W50, 1f);
+                MenuStyle.Brackets(field);
+                MenuStyle.Text(field, joinCode.Length > 0 ? joinCode : "····", UIKit.Face.Display, 30, joinCode.Length > 0 ? 1f : MenuStyle.W25, 0.25f);
                 for (int i = 0; i < Keypad.Length; i++)
                 {
-                    var k = new Rect(cx - 162 + (i % 3) * 112, r.y + 152 + (i / 3) * 66, 100, 56);
-                    if (UIKit.Button(k, Keypad[i] == "<" ? "Del" : Keypad[i], false, 22)) TypeKey(Keypad[i]);
+                    var k = new Rect(cx - 150f + (i % 3) * 104f, r.y + 170f + (i / 3) * 58f, 92f, 48f);
+                    if (MenuStyle.Button(k, Keypad[i] == "<" ? "Del" : Keypad[i])) TypeKey(Keypad[i]);
                 }
-                if (!string.IsNullOrEmpty(NetSession.LastError))
-                    UIKit.Text(new Rect(r.x, r.y + 418, r.width, 22), NetSession.LastError, UIKit.Style(UIKit.Face.Heavy, 15, UIKit.Danger, TextAnchor.MiddleCenter));
-                UIKit.Text(new Rect(r.x + 30, r.y + 444, r.width - 60, 40), "Both phones on the same Wi-Fi (or one phone's hotspot). You can also type the host's IP address.", UIKit.Style(UIKit.Face.Body, 13, UIKit.Dim, TextAnchor.MiddleCenter, true));
-                if (UIKit.Button(new Rect(cx - 250, r.yMax - 92, 230, 56), "Back", false, 18)) { joinEntry = false; Sfx.Play(SfxId.Plate, 0.5f); }
-                if (UIKit.Button(new Rect(cx + 20, r.yMax - 92, 230, 56), "Connect", true, 18)) Connect();
+                MenuStyle.Paragraph(new Rect(x, r.y + 410f, inner, 40f),
+                    (string.IsNullOrEmpty(NetSession.LastError) ? "" : NetSession.LastError + "\n") +
+                    "Same Wi-Fi or hotspot. You can also type the host's IP address.", UIKit.Face.Body, 12, MenuStyle.W50, TextAnchor.UpperCenter);
+                var connect = new Rect(r.xMax - 26f - 120f, r.yMax - 26f - 34f, 120f, 34f);
+                if (MenuStyle.Button(new Rect(connect.x - 10f - 96f, connect.y, 96f, 34f), "Back")) { joinEntry = false; Sfx.Play(SfxId.Plate, 0.5f); }
+                if (MenuStyle.Button(connect, "Connect", true)) Connect();
                 return;
             }
 
             if (NetSession.IsHost)
             {
-                UIKit.TagPill(new Vector2(cx, r.y), "Your room", UIKit.Sun);
-                UIKit.Text(new Rect(r.x, r.y + 40, r.width, 22), UIKit.Caps("Room code"), UIKit.Style(UIKit.Face.Display, 14, UIKit.Dim, TextAnchor.MiddleCenter));
-                UIKit.Text(new Rect(r.x, r.y + 66, r.width, 110), NetSession.RoomCode, UIKit.Style(UIKit.Face.Display, 96, UIKit.Sun, TextAnchor.MiddleCenter));
-                UIKit.Text(new Rect(r.x, r.y + 180, r.width, 22), string.IsNullOrEmpty(NetSession.LocalAddress) ? "" : "or IP  " + NetSession.LocalAddress, UIKit.Style(UIKit.Face.Body, 16, UIKit.Dim, TextAnchor.MiddleCenter));
-                UIKit.Divider(r.x + 40, r.xMax - 40, r.y + 222, 0.4f);
+                var r = Modal(w, h, Mathf.Min(w * 0.92f, 560f), 430f);
+                float x = r.x + 26f, inner = r.width - 52f;
+                MenuStyle.Text(new Rect(x, r.y + 26f, inner, 22f), "YOUR ROOM", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
+                MenuStyle.Text(new Rect(x, r.y + 70f, inner, 12f), "ROOM CODE", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperCenter);
+                MenuStyle.Text(new Rect(x, r.y + 88f, inner, 80f), NetSession.RoomCode, UIKit.Face.Display, 72, 1f, 0.12f, TextAnchor.UpperCenter);
+                if (!string.IsNullOrEmpty(NetSession.LocalAddress))
+                    MenuStyle.Text(new Rect(x, r.y + 184f, inner, 18f), "or IP  " + NetSession.LocalAddress, UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+                MenuStyle.Line(x, r.y + 218f, inner, MenuStyle.W25);
                 bool joined = NetSession.Connected;
-                float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 4f);
-                UIKit.Text(new Rect(r.x, r.y + 240, r.width, 30), joined ? "Player B has joined!" : "Waiting for Player B to join…",
-                    UIKit.Style(UIKit.Face.Heavy, 22, joined ? UIKit.Good : new Color(1, 1, 1, pulse), TextAnchor.MiddleCenter));
-                UIKit.Text(new Rect(r.x + 30, r.y + 282, r.width - 60, 60), "You play A (Gravity Controller). On the other phone: Mode → Online · Join a room, then type this code.",
-                    UIKit.Style(UIKit.Face.Body, 15, UIKit.Ink, TextAnchor.MiddleCenter, true));
-                UIKit.Text(new Rect(r.x, r.y + 352, r.width, 22), $"Stage {stage + 1} · {StageNames[stage]}" + (stage == 0 && cutscene ? "  ·  with opening cutscene" : ""),
-                    UIKit.Style(UIKit.Face.Body, 15, UIKit.Dim, TextAnchor.MiddleCenter));
-                if (UIKit.Button(new Rect(cx - 250, r.yMax - 92, 230, 56), "Close room", false, 18)) LeaveRoom();
-                GUI.enabled = joined;
-                if (UIKit.Button(new Rect(cx + 20, r.yMax - 92, 230, 56), "Start", joined, 18) && joined) StartGame();
-                GUI.enabled = true;
+                float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
+                MenuStyle.Text(new Rect(x, r.y + 236f, inner, 24f), joined ? "PLAYER B HAS JOINED" : "WAITING FOR PLAYER B…", UIKit.Face.Heavy, 16, joined ? 1f : 0.45f + 0.5f * pulse, 0.12f, TextAnchor.UpperCenter);
+                MenuStyle.Paragraph(new Rect(x, r.y + 272f, inner, 50f), "You play A (Gravity Controller). On the other device: Mode → Join a Room, then type this code.",
+                    UIKit.Face.Body, 13, MenuStyle.W80);
+                MenuStyle.Text(new Rect(x, r.y + 326f, inner, 16f), Stages[stage].name + (stage == 0 && cutscene ? "  ·  Cutscene on" : ""), UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+                var startBtn = new Rect(r.xMax - 26f - 120f, r.yMax - 26f - 34f, 120f, 34f);
+                if (MenuStyle.Button(new Rect(startBtn.x - 10f - 130f, startBtn.y, 130f, 34f), "Close room")) LeaveRoom();
+                if (joined) { if (MenuStyle.Button(startBtn, "Start", true)) StartGame(); }
+                else
+                {
+                    MenuStyle.Box(startBtn, MenuStyle.W25, 1f);
+                    MenuStyle.Text(startBtn, "START", UIKit.Face.Heavy, 12, MenuStyle.W25, 0.22f);
+                }
                 return;
             }
 
-            // joining phone
-            UIKit.TagPill(new Vector2(cx, r.y), "Online", UIKit.Glow);
+            // joining device, waiting for the host
+            var jr = Modal(w, h, Mathf.Min(w * 0.92f, 520f), 260f);
+            float jx = jr.x + 26f, jin = jr.width - 52f;
             bool connected = NetSession.Connected;
-            float p2 = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 4f);
-            UIKit.Text(new Rect(r.x, r.y + 120, r.width, 40), connected ? "Connected to room " + NetSession.RoomCode : "Looking for room " + (NetSession.RoomCode.Length > 0 ? NetSession.RoomCode : joinCode) + "…",
-                UIKit.Style(UIKit.Face.Heavy, 26, connected ? UIKit.Good : new Color(1, 1, 1, p2), TextAnchor.MiddleCenter));
-            UIKit.Text(new Rect(r.x + 30, r.y + 180, r.width - 60, 80), connected ? "You play B (Gravity Nullifier). The host starts the game." : "Make sure both phones are on the same Wi-Fi or hotspot, and the room is open on the other phone.",
-                UIKit.Style(UIKit.Face.Body, 17, UIKit.Ink, TextAnchor.MiddleCenter, true));
-            if (UIKit.Button(new Rect(cx - 115, r.yMax - 92, 230, 56), "Leave", false, 18)) LeaveRoom();
-        }
-
-        void DrawControls(float w)
-        {
-            UIKit.Shade(0.7f);
-            var r = new Rect(w * 0.5f - 470, 200, 940, 400);
-            UIKit.Panel(r);
-            UIKit.TagPill(new Vector2(r.center.x, r.y), "Controls", UIKit.Glow);
-            UIKit.PowerRing(new Rect(r.x + 30, r.y + 40, 96, 96), icons?.Ring_Track, icons?.Ring_Cooldown, icons?.Power_A_GravityController, 1f, UIKit.Sun);
-            UIKit.Text(new Rect(r.x + 146, r.y + 40, 760, 20), UIKit.Caps("Player A  ·  Gravity Controller"), UIKit.Style(UIKit.Face.Display, 14, UIKit.Sun));
-            UIKit.Text(new Rect(r.x + 146, r.y + 64, 770, 110),
-                "Host the room. WASD / arrows move · mouse or finger drag turns the camera · Space jump · E switch the gravity of the nearest " +
-                "marked zone (down / zero-g / up / onto walls). Changing a zone affects everything inside it — sometimes you two as well.", UIKit.Style(UIKit.Face.Body, 18, UIKit.Ink, TextAnchor.UpperLeft, true));
-            UIKit.PowerRing(new Rect(r.x + 30, r.y + 210, 96, 96), icons?.Ring_Track, icons?.Ring_Cooldown, icons?.Power_B_GravityNullifier, 1f, UIKit.Glow);
-            UIKit.Text(new Rect(r.x + 146, r.y + 210, 760, 20), UIKit.Caps("Player B  ·  Gravity Nullifier"), UIKit.Style(UIKit.Face.Display, 14, UIKit.Glow));
-            UIKit.Text(new Rect(r.x + 146, r.y + 234, 770, 130),
-                "Join the room with its code. Same keys: WASD / arrows · mouse or drag to look · Space jump · E tap: freeze the object in front of you. " +
-                "Hold E: steer it. Tap again to drop it.\nPhones: joystick, JUMP and POWER buttons. Hold R to reset to the checkpoint · Esc pauses.",
-                UIKit.Style(UIKit.Face.Body, 18, UIKit.Ink, TextAnchor.UpperLeft, true));
-            if (UIKit.Button(new Rect(r.center.x - 90, r.yMax - 56, 180, 40), "Back", true, 15)) showControls = false;
+            float p2 = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
+            MenuStyle.Text(new Rect(jx, jr.y + 26f, jin, 22f), "ONLINE", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
+            MenuStyle.Text(new Rect(jx, jr.y + 80f, jin, 26f),
+                connected ? "CONNECTED · ROOM " + NetSession.RoomCode : "LOOKING FOR ROOM " + (NetSession.RoomCode.Length > 0 ? NetSession.RoomCode : joinCode) + "…",
+                UIKit.Face.Heavy, 18, connected ? 1f : 0.45f + 0.5f * p2, 0.08f, TextAnchor.UpperCenter);
+            MenuStyle.Paragraph(new Rect(jx, jr.y + 122f, jin, 50f),
+                connected ? "You play B (Gravity Nullifier). The host starts the game." : "Both devices on the same Wi-Fi or hotspot, with the room open on the other one.",
+                UIKit.Face.Body, 13, MenuStyle.W80);
+            if (MenuStyle.Button(new Rect(jr.xMax - 26f - 96f, jr.yMax - 26f - 34f, 96f, 34f), "Leave")) LeaveRoom();
         }
     }
 }

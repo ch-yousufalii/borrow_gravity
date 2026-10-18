@@ -64,7 +64,9 @@ namespace BorrowGravity
             if (cam == null) return;
             Vector3 to = transform.position - cam.transform.position;
             float d2 = to.sqrMagnitude;
-            bool near = d2 < showWithin * showWithin && d2 > hideCloserThan * hideCloserThan;
+            var sm = StageManager.Instance;
+            bool playing = sm == null || !sm.isActiveAndEnabled || sm.State == StageState.Playing; // not behind the intro card / pause
+            bool near = playing && d2 < showWithin * showWithin && d2 > hideCloserThan * hideCloserThan;
             if (near != shown)
             {
                 shown = near;
