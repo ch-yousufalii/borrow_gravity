@@ -43,6 +43,15 @@ namespace BorrowGravity.EditorTools
             var a = Actor(root, 0, new Vector3(5.4f, 0.92f, 2.2f));
             var b = Actor(root, 1, new Vector3(5.4f, 0.92f, 2.2f));
             var core = Spawn("Engine_Core", new Vector3(6.2f, 1.6f, 3.4f), new Vector3(0f, 90f, 0f), root, null, "BrokenEngineCore");
+            // the engine cracks into two halves; each astronaut carries one for the rest of the game
+            var halfA = OutroBuilder.EngineHalf(root, "EngineHalf_A", new Color(1f, 0.62f, 0.36f));
+            var halfB = OutroBuilder.EngineHalf(root, "EngineHalf_B", new Color(0.36f, 0.88f, 1f));
+            var split = Particles(root, "CoreSplit", new Vector3(6.6f, 0.5f, 0.6f), Kind.Explosion);
+            foreach (var actor in new[] { a, b })
+            {
+                var anim = actor.GetComponent<SuitAnimator>();
+                if (anim != null) anim.holdArms = true;
+            }
             NoColliders(core);
             var coreSmoke = Particles(core.transform, "CoreSmoke", new Vector3(0f, 1.6f, 0f), Kind.Smoke);
             var coreSparks = Particles(core.transform, "CoreSparks", new Vector3(0f, 1.2f, 0f), Kind.Sparks);
@@ -120,7 +129,19 @@ namespace BorrowGravity.EditorTools
             Move(cs, core.transform, 23f, 2f, new Vector3(6.2f, 1.6f, 3.4f), new Vector3(6.6f, 0.02f, 0.6f), new Vector3(0, 90, 0), new Vector3(8, 70, -6));
             Move(cs, a, 23.2f, 1.6f, new Vector3(2.2f, 0.92f, -0.6f), new Vector3(4.6f, 0.92f, 0.4f), new Vector3(0, 250, 0), new Vector3(0, 90, 0), true);
             Move(cs, b, 23.4f, 1.5f, new Vector3(4.0f, 0.92f, -0.8f), new Vector3(5.0f, 0.92f, -0.6f), new Vector3(0, 160, 0), new Vector3(0, 70, 0), true);
-            Move(cs, core.transform, 26f, 2.2f, new Vector3(6.6f, 0.02f, 0.6f), new Vector3(12f, -14f, 1.5f), new Vector3(8, 70, -6), new Vector3(70, 160, 40));
+            // the core splits: the halves jump into the astronauts' hands, then travel with them
+            const float handY = 0.62f;
+            Move(cs, halfA, 26.1f, 0.8f, new Vector3(6.6f, 0.3f, 0.6f), new Vector3(5.95f, handY, 0.4f), new Vector3(0, 90, 0), new Vector3(0, 90, 0));
+            Move(cs, halfB, 26.1f, 0.8f, new Vector3(6.6f, 0.3f, 0.6f), new Vector3(6.25f, handY, -0.6f), new Vector3(0, 90, 0), new Vector3(0, 70, 0));
+            Move(cs, halfA, 28.5f, 2f, new Vector3(5.95f, handY, 0.4f), new Vector3(2.55f, handY, 0f), new Vector3(0, 90, 0), new Vector3(0, 80, 0));
+            Move(cs, halfB, 28.7f, 2f, new Vector3(6.25f, handY, -0.6f), new Vector3(4.35f, handY, 0f), new Vector3(0, 70, 0), new Vector3(0, 90, 0));
+            Cue(cs, 0f, CueType.Deactivate, halfA.gameObject);
+            Cue(cs, 0f, CueType.Deactivate, halfB.gameObject);
+            Cue(cs, 26f, CueType.Deactivate, core);
+            Cue(cs, 26f, CueType.Activate, halfA.gameObject);
+            Cue(cs, 26f, CueType.Activate, halfB.gameObject);
+            Cue(cs, 26f, CueType.Burst, split, 0.6f);
+            Cue(cs, 26f, CueType.Sound, null, 0.8f, SfxId.Crack);
             Move(cs, a, 26f, 0.8f, new Vector3(4.6f, 0.92f, 0.4f), new Vector3(5.3f, 0.92f, 0.4f), new Vector3(0, 90, 0), new Vector3(0, 90, 0), true);
             Move(cs, b, 26f, 0.8f, new Vector3(5.0f, 0.92f, -0.6f), new Vector3(5.6f, 0.92f, -0.6f), new Vector3(0, 70, 0), new Vector3(0, 70, 0), true);
             Move(cs, a, 28.5f, 2f, new Vector3(5.3f, 0.92f, 0.4f), new Vector3(1.9f, 0.92f, 0f), new Vector3(0, 90, 0), new Vector3(0, 80, 0), true);
@@ -136,11 +157,11 @@ namespace BorrowGravity.EditorTools
             Line(cs, 16.1f, 1.6f, "B", ColB, "Brace! Brace!");
             Line(cs, 20.2f, 2.4f, "A", ColA, "Everyone in one piece? ...Good.");
             Line(cs, 22.8f, 2.8f, "B", ColB, "The core is fried. Help me pull it out before it blows.");
-            Line(cs, 25.7f, 1.6f, "A", ColA, "On three — push!");
-            Line(cs, 27.5f, 2.6f, "B", ColB, "No spare on board... but the scanner found one.");
-            Line(cs, 30.2f, 2.6f, "A", ColA, "In that abandoned station? Across all of that wreckage?");
+            Line(cs, 25.7f, 1.6f, "A", ColA, "On three — pull!");
+            Line(cs, 27.4f, 2.6f, "B", ColB, "It split in two! Grab your half — we're not leaving it.");
+            Line(cs, 30.2f, 2.6f, "A", ColA, "The scanner says that station can fix it. Across all that wreckage?");
             Line(cs, 32.9f, 2.0f, "B", ColB, "You bend the gravity, I'll hold things still.");
-            Line(cs, 35.0f, 1.6f, "A", ColA, "Then let's go. Together.");
+            Line(cs, 35.0f, 1.6f, "A", ColA, "Hold on to your half. Let's go."); 
 
             // ---------- cinematic sound ----------
             Cue(cs, 0.3f, CueType.Sound, null, 0.6f, SfxId.Whoosh);

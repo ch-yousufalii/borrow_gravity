@@ -35,6 +35,12 @@ namespace BorrowGravity
         /// <summary>Online each phone shows only its own player's controls, across the whole screen.</summary>
         static bool Shows(int p) => !NetSession.Online || p == NetSession.LocalPlayer;
 
+        // arrows mode: up, down, left, right (GUI y points down)
+        static readonly Vector2[] ArrowDirs = { new Vector2(0f, -1f), new Vector2(0f, 1f), new Vector2(-1f, 0f), new Vector2(1f, 0f) };
+        readonly bool[,] arrowHeld = new bool[2, 4];
+        float ArrowRadius => SR * 0.42f;
+        Vector2 ArrowCenter(Stick st, int i) => st.home + ArrowDirs[i] * SR * 0.8f;
+
         // sizes chosen in Settings (ControlSettings)
         float SR => stickRadius * ControlSettings.StickSize;
         float BR => buttonRadius * ControlSettings.ButtonSize;
@@ -74,6 +80,25 @@ namespace BorrowGravity
             {
                 if (!Shows(p)) continue; // the other player's input arrives over the network
                 var st = sticks[p];
+                if (ControlSettings.Movement == MoveStyle.Arrows)
+                {
+                    // four arrow buttons around the joystick's resting spot; two at once = diagonal
+                    Vector2 mv = Vector2.zero;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        arrowHeld[p, i] = false;
+                        foreach (var ptr in pointers)
+                            if (Vector2.Distance(ptr.pos, ArrowCenter(st, i)) < ArrowRadius * 1.15f) { arrowHeld[p, i] = true; mv += ArrowDirs[i]; break; }
+                    }
+                    st.pointer = int.MinValue;
+                    st.center = st.home;
+                    st.knob = Vector2.zero;
+                    st.input = Vector2.ClampMagnitude(mv, 1f);
+                    jumps[p].held = Touching(jumps[p].center, int.MinValue);
+                    powers[p].held = Touching(powers[p].center, int.MinValue);
+                    VirtualInput.Set(p, new Vector2(st.input.x, -st.input.y), jumps[p].held, powers[p].held);
+                    continue;
+                }
                 // keep the captured pointer, or capture a new press inside the stick area
                 Vector2? pos = null;
                 foreach (var ptr in pointers)
@@ -201,28 +226,50 @@ namespace BorrowGravity
             for (int p = 0; p < 2; p++)
             {
                 if (!Shows(p)) continue;
-                Color c = p == 0 ? UIKit.Sun : UIKit.Glow;
                 var st = sticks[p];
-                float d = SR * 2f;
-                UIKit.Dot(st.center, d, new Color(UIKit.Void.r, UIKit.Void.g, UIKit.Void.b, 0.35f));
-                UIKit.Tex(new Rect(st.center.x - SR, st.center.y - SR, d, d), icons?.Ring_Track, new Color(1, 1, 1, 0.7f));
-                var knob = st.center + st.knob * SR;
-                UIKit.Dot(knob, 54f * ControlSettings.StickSize, new Color(c.r, c.g, c.b, st.pointer != int.MinValue ? 0.9f : 0.55f));
-                UIKit.Dot(knob, 30f * ControlSettings.StickSize, new Color(1, 1, 1, 0.35f));
-                UIKit.Text(new Rect(st.center.x - 60, st.center.y + SR + 4, 120, 18), UIKit.Caps(p == 0 ? "Player A" : "Player B"), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
-                DrawButton(jumps[p], c, "Jump", null);
-                DrawButton(powers[p], c, p == 0 ? "Gravity" : "Nullify", p == 0 ? icons?.Power_A_GravityController : icons?.Power_B_GravityNullifier);
+                if (ControlSettings.Movement == MoveStyle.Arrows)
+                {
+                    for (int i = 0; i < 4; i++)
+                    {
+                        var c = ArrowCenter(st, i);
+                        float r = ArrowRadius;
+                        var rect = new Rect(c.x - r, c.y - r, r * 2f, r * 2f);
+                        if (arrowHeld[p, i]) MenuStyle.Box(rect, MenuStyle.W25, 0f, r);
+                        MenuStyle.Box(rect, arrowHeld[p, i] ? 1f : MenuStyle.W50, 1f, r);
+                        Chevron(c, i, r * 0.55f, arrowHeld[p, i] ? 1f : MenuStyle.W80);
+                    }
+                }
+                else
+                {
+                    // white outline joystick (floating: drawn where the thumb landed)
+                    var ring = new Rect(st.center.x - SR, st.center.y - SR, SR * 2f, SR * 2f);
+                    MenuStyle.Box(ring, st.pointer != int.MinValue ? MenuStyle.W80 : MenuStyle.W50, 1f, SR);
+                    var knob = st.center + st.knob * SR;
+                    float k = 26f * ControlSettings.StickSize;
+                    MenuStyle.Box(new Rect(knob.x - k, knob.y - k, k * 2f, k * 2f), st.pointer != int.MinValue ? 0.85f : 0.45f, 0f, k);
+                }
+                MenuStyle.Text(new Rect(st.home.x - 70, st.home.y + SR + 6, 140, 14), p == 0 ? "PLAYER A" : "PLAYER B", UIKit.Face.Heavy, 9, MenuStyle.W50, 0.3f);
+                DrawButton(jumps[p], "JUMP");
+                DrawButton(powers[p], p == 0 ? "GRAVITY" : "NULLIFY");
             }
         }
 
-        void DrawButton(Button b, Color c, string label, Texture icon)
+        /// <summary>An arrow glyph pointing up / down / left / right (rotated "‹").</summary>
+        public static void Chevron(Vector2 c, int dir, float size, float alpha)
         {
-            float d = BR * 2f;
-            UIKit.Dot(b.center, d, new Color(UIKit.Void.r, UIKit.Void.g, UIKit.Void.b, b.held ? 0.7f : 0.4f));
-            UIKit.Tex(new Rect(b.center.x - BR, b.center.y - BR, d, d), icons?.Ring_Track, b.held ? c : new Color(1, 1, 1, 0.7f));
-            if (icon != null) UIKit.Tex(new Rect(b.center.x - BR * 0.62f, b.center.y - BR * 0.62f, d * 0.62f, d * 0.62f), icon);
-            else UIKit.Text(new Rect(b.center.x - 40, b.center.y - 12, 80, 24), UIKit.Caps(label), UIKit.Style(UIKit.Face.Display, 13, b.held ? c : UIKit.Ink, TextAnchor.MiddleCenter));
-            if (icon != null) UIKit.Text(new Rect(b.center.x - 50, b.center.y + BR + 2, 100, 16), UIKit.Caps(label), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
+            float angle = dir == 0 ? 90f : dir == 1 ? -90f : dir == 2 ? 0f : 180f;
+            var keep = GUI.matrix;
+            GUIUtility.RotateAroundPivot(angle, c * UIKit.Scale);
+            MenuStyle.Text(new Rect(c.x - size, c.y - size, size * 2f, size * 2f), "‹", UIKit.Face.Heavy, Mathf.RoundToInt(size * 1.6f), alpha, 0f, TextAnchor.MiddleCenter, -2f);
+            GUI.matrix = keep;
+        }
+
+        void DrawButton(Button b, string label)
+        {
+            var rect = new Rect(b.center.x - BR, b.center.y - BR, BR * 2f, BR * 2f);
+            if (b.held) MenuStyle.Box(rect, MenuStyle.W25, 0f, BR);
+            MenuStyle.Box(rect, b.held ? 1f : MenuStyle.W50, 1f, BR);
+            MenuStyle.Text(rect, label, UIKit.Face.Heavy, Mathf.RoundToInt(Mathf.Clamp(11f * ControlSettings.ButtonSize, 9f, 15f)), 1f, 0.15f);
         }
     }
 }

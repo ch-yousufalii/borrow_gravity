@@ -21,9 +21,9 @@ namespace BorrowGravity.EditorTools
             var safe = Lit("SafeMarker", new Color(0.2f, 1f, 0.5f), new Color(0.2f, 1f, 0.5f) * 2f);
 
             // ---------- the two engine halves (one each, carried in the hands) ----------
+            // each player already carries their engine half (given in Astronaut); the layout's engine props go
             Remove(ctx.Piece("7.1", "Engine_Carrier"));
-            EngineHalf(ctx, 0, ctx.Piece("7.1", "Engine_Core"), new Vector3(7.2f, 0.4f, -1.0f));
-            EngineHalf(ctx, 1, null, new Vector3(7.2f, 0.4f, 1.0f));
+            Remove(ctx.Piece("7.1", "Engine_Core"));
 
             // ---------- 7.1 Engine Handling ----------
             var start = Checkpoint(ctx, ctx.Piece("7.1", "Checkpoint_Beacon"), new Vector3(2f, 0.03f, -2.6f), 0, "Engine Bay",
@@ -33,7 +33,7 @@ namespace BorrowGravity.EditorTools
                 new[] { GravityMode.Down, GravityMode.Zero }, players: false,
                 arrows: new[] { new Vector3(9f, 3.8f, -1.9f), new Vector3(17f, 3.8f, -1.9f) });
             Hint(ctx, "7.1  Engine Handling",
-                "The new engine comes in two halves. Walk up to yours to pick it up — A takes the orange half, B the cyan one — and carry it in your hands back to the ship.",
+                "The repaired engine is in two halves — A carries the orange one, B the cyan one. Keep them safe all the way back to the ship.",
                 new Vector3(4.5f, 1.5f, 0f), new Vector3(2f, 4f, 6f), 9f);
             Hint(ctx, "The Sill",
                 "Jump the sill and the gap behind it — your engine half stays in your hands.",
@@ -50,7 +50,7 @@ namespace BorrowGravity.EditorTools
                 cp.section = 1;
                 cp.triggerOnStep = false;
                 cp.regenerateAfter = -1f;
-                cp.crackTime = 1.4f;
+                cp.crackTime = 2.2f;
                 collapse.Add(cp);
             }
             var collTrig = TriggerBox(ctx.Group("7.2 Bridge"), "CollapseTrigger", new Vector3(20.5f, 1.5f, 0f), new Vector3(1f, 4f, 4f));
@@ -62,8 +62,8 @@ namespace BorrowGravity.EditorTools
             tpd.requiredPlayers = 2; // only once both are on the bridge, so nobody is left behind
             tpd.rearm = false;
             tpd.startDelay = 1f;
-            tpd.interval = 2.6f;
-            tpd.warnTime = 1.4f;
+            tpd.interval = 3.6f;
+            tpd.warnTime = 2.0f;
             tpd.warningText = "The bridge is collapsing behind you — push!";
             var cp36 = Checkpoint(ctx, null, new Vector3(35f, 0f, -1.2f), 1, "Bridge End", new Vector3(4f, 4f, 3f), spawnX: 33.2f);
             LaserAt(ctx, "7.2 Bridge", 31.2f, 0f, 3.2f, -1.7f, 1.7f, 1.5f, 2.6f, 0f);
@@ -107,7 +107,7 @@ namespace BorrowGravity.EditorTools
                 HazardBox(root.transform, "CableHit", root.transform.position + new Vector3(0f, -6.7f, 0f), new Vector3(1.1f, 3.2f, 2.6f), HazardEffect.Respawn, false).carrierDamage = 40f;
                 var dropper = root.AddComponent<CableDropper>();
                 dropper.raiseHeight = 6.5f;
-                dropper.period = 4.6f;
+                dropper.period = 5.8f;
                 dropper.offset = offsets[i];
                 dropper.warnRenderer = cab.GetComponent<Renderer>();
                 dropper.warnLight = PointLight(root.transform, root.transform.position + new Vector3(0f, -1f, -1.2f), new Color(1f, 0.55f, 0.1f), 8f, 0f);
@@ -127,7 +127,7 @@ namespace BorrowGravity.EditorTools
             var spin = ring.AddComponent<Rotator>();
             spin.section = 3;
             spin.axis = Vector3.forward;
-            spin.degreesPerSecond = 14f;
+            spin.degreesPerSecond = 9f;
             for (int i = 0; i < 3; i++)
             {
                 float a = (60f + i * 120f) * Mathf.Deg2Rad;
@@ -297,7 +297,7 @@ namespace BorrowGravity.EditorTools
             var timerTrig = TriggerBox(ctx.Group("7.8 Ship"), "RepairCountdown", new Vector3(164f, 1.5f, 0f), new Vector3(10f, 3f, 5f));
             var timer = timerTrig.AddComponent<CountdownRoom>();
             timer.section = 7;
-            timer.duration = 75f;
+            timer.duration = 120f;
             timer.successSignal = final;
             timer.label = "STATION COLLAPSE";
             timer.startMessage = "The station is breaking apart! Install both engine halves, keep gravity DOWN and hit both locks!";
@@ -339,26 +339,6 @@ namespace BorrowGravity.EditorTools
                 times: new[] { TimeOfDay.At(TimeOfDay.Night(), 0f), TimeOfDay.At(TimeOfDay.Night(), 0.7f), TimeOfDay.At(TimeOfDay.Dawn(), 1f) },
                 routeStartX: 0f, routeEndX: 165f);
             Save(ctx, ScenePath);
-        }
-
-        /// <summary>One engine half on the bay floor: A's is orange, B's is cyan; the owner walks up to it to pick it up.</summary>
-        static void EngineHalf(StageContext ctx, int owner, GameObject existingCore, Vector3 at)
-        {
-            var root = new GameObject(owner == 0 ? "EngineHalf_A" : "EngineHalf_B");
-            root.transform.SetParent(ctx.Group("Engine"), false);
-            root.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, 90f, 0f));
-            var mesh = existingCore != null ? Adopt(ctx, existingCore, "Engine") : Spawn("Engine_Core", at, Vector3.zero, ctx.Group("Engine"));
-            mesh.name = "Core";
-            mesh.transform.SetParent(root.transform, false);
-            mesh.transform.localPosition = new Vector3(0f, -0.25f, 0f);
-            mesh.transform.localRotation = Quaternion.identity;
-            mesh.transform.localScale = Vector3.one * 0.45f;
-            NoColliders(root);
-            Color c = owner == 0 ? new Color(1f, 0.62f, 0.36f) : new Color(0.36f, 0.88f, 1f);
-            PointLight(root.transform, at + Vector3.up * 0.6f, c, 3.5f, 2.2f);
-            var part = root.AddComponent<EnginePart>();
-            part.owner = owner;
-            part.displayName = owner == 0 ? "orange engine half" : "cyan engine half";
         }
 
         static Transform SpawnPoint(StageContext ctx, Vector3 at)
@@ -403,7 +383,7 @@ namespace BorrowGravity.EditorTools
             fe.fallEnd = landing + new Vector3(0f, 1.2f, 0f);
             fe.endEuler = chunk.transform.eulerAngles + new Vector3(30f, 20f, 10f);
             fe.fallTime = 0.8f;
-            fe.warnTime = 1.8f;
+            fe.warnTime = 2.6f;
             fe.repeat = true;
             fe.repeatPeriod = period;
             fe.repeatOffset = offset;

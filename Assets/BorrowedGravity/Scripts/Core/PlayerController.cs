@@ -66,7 +66,7 @@ namespace BorrowGravity
         public float moveSpeed = 6f;
         public float acceleration = 60f;
         public float airAcceleration = 35f;
-        public float jumpVelocity = 7.5f;
+        public float jumpVelocity = 10f;
         public float jumpBufferTime = 0.15f;
         public float coyoteTime = 0.1f;
         public float groundCheckDistance = 0.15f;

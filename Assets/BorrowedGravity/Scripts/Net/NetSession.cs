@@ -45,6 +45,105 @@ namespace BorrowGravity
         static volatile bool running;
         static readonly ConcurrentQueue<(byte[] data, IPEndPoint from)> inbox = new ConcurrentQueue<(byte[], IPEndPoint)>();
         static IPEndPoint peer;
+
+        // internet rooms (Unity Relay): packets arrive through RelayLink and are tagged with this stand-in address
+        static bool viaRelay;
+        static readonly IPEndPoint RelayPeer = new IPEndPoint(IPAddress.Parse("10.255.255.1"), 1);
+        /// <summary>True while the room runs through Unity Relay (works across different networks).</summary>
+        public static bool ViaRelay => viaRelay;
+        /// <summary>True while an internet room is being created / joined.</summary>
+        public static bool Busy { get; private set; }
+
+        /// <summary>
+        /// Host a room: an internet room through Unity Relay when it is available (code like "K7Q2XD"),
+        /// otherwise a same-Wi-Fi room (4-digit code).
+        /// </summary>
+        public static async void HostRoom()
+        {
+            Stop();
+            Busy = true;
+            LastError = "";
+            try
+            {
+                string code = await RelayLink.HostAsync();
+                Mode = NetMode.Host;
+                Status = NetStatus.Waiting;
+                RoomCode = code.ToUpperInvariant();
+                BeginRelay();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Net] Relay unavailable, using a same-Wi-Fi room: " + e.Message);
+                StartHost();
+                if (Online) LastError = "Internet room unavailable — this is a same-Wi-Fi room.";
+            }
+            Busy = false;
+        }
+
+        static async void JoinRelay(string code)
+        {
+            Mode = NetMode.Client;
+            Status = NetStatus.Searching;
+            RoomCode = code;
+            Busy = true;
+            try
+            {
+                await RelayLink.JoinAsync(code);
+                BeginRelay();
+                peer = RelayPeer;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Net] Relay join failed: " + e.Message);
+                Stop();
+                LastError = "Couldn't join room " + code + " — check the code and your internet.";
+            }
+            Busy = false;
+        }
+
+        static void BeginRelay()
+        {
+            viaRelay = true;
+            RelayLink.Received -= OnRelayData;
+            RelayLink.Connected -= OnRelayConnected;
+            RelayLink.Disconnected -= OnRelayDisconnected;
+            RelayLink.Received += OnRelayData;
+            RelayLink.Connected += OnRelayConnected;
+            RelayLink.Disconnected += OnRelayDisconnected;
+            LastError = "";
+            Application.runInBackground = true;
+            LocalAddress = "";
+            gotInput = false;
+            lastReceive = Time.realtimeSinceStartup;
+            NetHud.Clear();
+            EnsureRunner();
+        }
+
+        static void OnRelayData(byte[] data)
+        {
+            if (data.Length >= 2 && data[0] == Magic) inbox.Enqueue((data, RelayPeer));
+        }
+
+        static void OnRelayConnected()
+        {
+            if (!IsClient) return;
+            peer = RelayPeer;
+            Write(NetMsg.Hello); writer.Write(joinTarget);
+            SendTo(peer);
+        }
+
+        static void OnRelayDisconnected()
+        {
+            if (Online) Lose(IsHost ? "The other player left the room" : "Lost connection to the room");
+        }
+
+        static void EnsureRunner()
+        {
+            if (runner != null) return;
+            var go = new GameObject("NetSession");
+            DontDestroyOnLoad(go);
+            runner = go.AddComponent<NetSession>();
+        }
         static string joinTarget = "";
         static float lastReceive, nextSearch, nextPing, nextInput;
 
@@ -103,8 +202,11 @@ namespace BorrowGravity
         public static bool StartClient(string codeOrAddress)
         {
             Stop();
-            joinTarget = (codeOrAddress ?? "").Trim();
+            joinTarget = (codeOrAddress ?? "").Trim().ToUpperInvariant();
             if (joinTarget.Length == 0) { LastError = "Type the room code first"; return false; }
+            // letters = an internet room code (Unity Relay); digits / an IP = a same-Wi-Fi room
+            foreach (char ch in joinTarget)
+                if (char.IsLetter(ch)) { ReadDevSwitches(); JoinRelay(joinTarget); return true; }
             try
             {
                 udp = new UdpClient(AddressFamily.InterNetwork);
@@ -139,18 +241,15 @@ namespace BorrowGravity
             running = true;
             thread = new Thread(ReceiveLoop) { IsBackground = true, Name = "BG-Net" };
             thread.Start();
-            if (runner == null)
-            {
-                var go = new GameObject("NetSession");
-                DontDestroyOnLoad(go);
-                runner = go.AddComponent<NetSession>();
-            }
+            EnsureRunner();
         }
 
         public static void Stop()
         {
-            if (Mode == NetMode.Offline && udp == null) return;
+            if (Mode == NetMode.Offline && udp == null && !RelayLink.Active) return;
             if (peer != null) { Write(NetMsg.Bye); SendTo(peer); }
+            RelayLink.Shutdown();
+            viaRelay = false;
             CloseSocket();
             ReleaseMulticastLock();
             Mode = NetMode.Offline;
@@ -208,6 +307,7 @@ namespace BorrowGravity
         void Update()
         {
             if (!Online) return;
+            if (viaRelay) RelayLink.Pump();
             float now = Time.realtimeSinceStartup;
             while (inbox.TryDequeue(out var m))
             {
@@ -216,7 +316,7 @@ namespace BorrowGravity
             }
             if (!Online) return;
 
-            if (IsClient && Status == NetStatus.Searching && now >= nextSearch)
+            if (IsClient && !viaRelay && Status == NetStatus.Searching && now >= nextSearch)
             {
                 nextSearch = now + 0.4f;
                 if (joinTarget.Contains(".") && IPAddress.TryParse(joinTarget, out var ip))
@@ -611,8 +711,10 @@ namespace BorrowGravity
 
         static void SendTo(IPEndPoint to)
         {
-            if (udp == null || to == null) return;
+            if (to == null) return;
             writer.Flush();
+            if (viaRelay) { RelayLink.Send(outStream.GetBuffer(), (int)outStream.Length); return; }
+            if (udp == null) return;
             try { udp.Send(outStream.GetBuffer(), (int)outStream.Length, to); }
             catch (Exception) { /* unreachable broadcast address etc. */ }
         }

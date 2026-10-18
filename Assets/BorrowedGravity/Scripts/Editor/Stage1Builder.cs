@@ -107,7 +107,7 @@ namespace BorrowGravity.EditorTools
             var pend = swingRoot.AddComponent<Pendulum>();
             pend.section = 2;
             pend.amplitude = 30f;
-            pend.period = 3.6f;
+            pend.period = 4.4f;
             pend.stopSignal = socket;
             Hint(ctx, "5.3  The Cable Drop",
                 "A damaged cable swings across the platform. Pin it with the counterweight!\nB: steer the floating counterweight over the glowing clamp pad.  A: switch its zone DOWN.",
@@ -119,7 +119,7 @@ namespace BorrowGravity.EditorTools
                 var weak = Adopt(ctx, ctx.Piece("5.4", "Bridge_Section_Weak", i), "5.4 Bridge", "WeakPanel" + i);
                 var cp = weak.AddComponent<CrumblePlatform>();
                 cp.section = 3;
-                cp.crackTime = 0.8f;
+                cp.crackTime = 1.2f;
                 cp.regenerateAfter = 4.5f;
             }
             Checkpoint(ctx, null, new Vector3(85.6f, 0.55f, -1.3f), 3, "Broken Bridge", new Vector3(3.5f, 4f, 4.4f));
@@ -138,7 +138,7 @@ namespace BorrowGravity.EditorTools
                 crumble.section = 3;
                 crumble.triggerOnStep = false;
                 crumble.regenerateAfter = 4f;
-                br.AddComponent<CrumbleOnLoad>().crackTime = 0.35f;
+                br.AddComponent<CrumbleOnLoad>().crackTime = 0.7f;
             }
             Zone(ctx, "Bridge Gap Field", 3, new Vector3(90.9f, 3f, 0f), new Vector3(5f, 10f, 4.4f), GravityMode.Zero,
                 new[] { GravityMode.Zero, GravityMode.Down }, players: false,
@@ -221,8 +221,8 @@ namespace BorrowGravity.EditorTools
             var tpd = runTrigger.AddComponent<TimedPowerDown>();
             tpd.section = 6;
             tpd.platforms = chain.ToArray();
-            tpd.interval = 1.15f;
-            tpd.warnTime = 1.0f;
+            tpd.interval = 1.6f;
+            tpd.warnTime = 1.4f;
             tpd.startDelay = 0.6f;
             tpd.warningText = "Platforms powering down — run!";
             var key = Adopt(ctx, ctx.Piece("5.7", "Platform_Metal_2x2", 4), "5.7 Run", "KeyPlatform");

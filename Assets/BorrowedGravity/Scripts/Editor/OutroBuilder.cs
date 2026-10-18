@@ -157,7 +157,7 @@ namespace BorrowGravity.EditorTools
         }
 
         /// <summary>A hand-held engine half (scaled-down core with a coloured glow) for the cutscene.</summary>
-        static Transform EngineHalf(Transform parent, string name, Color glow)
+        internal static Transform EngineHalf(Transform parent, string name, Color glow)
         {
             var half = new GameObject(name).transform;
             half.SetParent(parent, false);

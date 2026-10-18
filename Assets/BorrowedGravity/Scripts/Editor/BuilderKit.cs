@@ -557,8 +557,34 @@ namespace BorrowGravity.EditorTools
 
         // ---------- players, camera, UI ----------
 
+        /// <summary>
+        /// One half of the engine (A orange, B cyan). With startHeld it is in its owner's hands from the start of the
+        /// stage — both players carry their half through the whole game.
+        /// </summary>
+        public static EnginePart EngineHalf(StageContext ctx, int owner, Vector3 at, bool startHeld)
+        {
+            var root = new GameObject(owner == 0 ? "EngineHalf_A" : "EngineHalf_B");
+            root.transform.SetParent(ctx.Group("Engine"), false);
+            root.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, 90f, 0f));
+            var mesh = Spawn("Engine_Core", at, Vector3.zero, ctx.Group("Engine"));
+            mesh.name = "Core";
+            mesh.transform.SetParent(root.transform, false);
+            mesh.transform.localPosition = new Vector3(0f, -0.25f, 0f);
+            mesh.transform.localRotation = Quaternion.identity;
+            mesh.transform.localScale = Vector3.one * 0.45f;
+            NoColliders(root);
+            Color c = owner == 0 ? new Color(1f, 0.62f, 0.36f) : new Color(0.36f, 0.88f, 1f);
+            PointLight(root.transform, at + Vector3.up * 0.6f, c, 3.5f, 2.2f);
+            var part = root.AddComponent<EnginePart>();
+            part.owner = owner;
+            part.startHeld = startHeld;
+            part.displayName = owner == 0 ? "orange engine half" : "cyan engine half";
+            return part;
+        }
+
         public static PlayerController Astronaut(StageContext ctx, int index, Vector3 pos)
         {
+            EngineHalf(ctx, index, pos + Vector3.right * 0.65f, true); // carried in the hands all game
             bool a = index == 0;
             Color suit = a ? new Color(1f, 0.55f, 0.15f) : new Color(0.25f, 0.6f, 1f);
             var root = new GameObject(a ? "Player_A" : "Player_B");
@@ -781,6 +807,9 @@ namespace BorrowGravity.EditorTools
         public static Component LaserAt(StageContext ctx, string group, float x, float y0, float height, float z0, float z1,
             float on = 1.6f, float off = 2.2f, float offset = 0f)
         {
+            // easier: lasers stay off longer and fire for less time
+            on *= 0.75f;
+            off *= 1.35f;
             var root = new GameObject("LaserGate");
             root.transform.SetParent(ctx.Group(group), false);
             root.transform.position = new Vector3(x, y0, (z0 + z1) * 0.5f);
@@ -809,6 +838,7 @@ namespace BorrowGravity.EditorTools
         /// <summary>A girder that spins flat at knee height around a vertical axis — jump it as it comes round.</summary>
         public static Rotator SweeperArm(StageContext ctx, string group, Vector3 pivot, float length = 5.5f, float degreesPerSecond = 70f)
         {
+            degreesPerSecond *= 0.7f; // easier: slower sweep
             var root = new GameObject("SweeperArm");
             root.transform.SetParent(ctx.Group(group), false);
             root.transform.position = pivot;
