@@ -80,7 +80,8 @@ namespace BorrowGravity.Dev
             var sm = StageManager.Instance;
             sb.Append($"net={NetSession.Mode}/{NetSession.Status} scene={UnityEngine.SceneManagement.SceneManager.GetActiveScene().name} ");
             sb.Append($"level={(gs != null ? gs.Current : -1)} stage={(sm != null && sm.isActiveAndEnabled ? sm.stageNumber + ":" + sm.State : "-")} ");
-            for (int p = 0; p < 2; p++)
+            sb.Append($"me={NetSession.LocalPlayer} of {GameFlow.PlayerCount} ");
+            for (int p = 0; p < GameFlow.MaxPlayers; p++)
             {
                 var pc = Players.Get(p);
                 if (pc == null) { sb.Append($"P{p}=- "); continue; }

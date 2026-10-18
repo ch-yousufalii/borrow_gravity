@@ -330,6 +330,8 @@ namespace BorrowGravity.EditorTools
 
             Astronaut(ctx, 0, start.GetSpawn(0));
             Astronaut(ctx, 1, start.GetSpawn(1));
+            Astronaut(ctx, 2, start.GetSpawn(2));
+            Astronaut(ctx, 3, start.GetSpawn(3));
             CoreObjects(ctx, 3, "STAGE 3 — ENGINE RUN: THE COLLAPSING RETURN", HudObjective.ReturnToShip, "Return to the Ship",
                 "The station is tearing itself apart. The new engine comes in two halves — each of you carries one in your hands, " +
                 "all the way back to your ship: across collapsing bridges, falling cables and a gravity ring.\n\nBoth halves must be installed to fly home.",

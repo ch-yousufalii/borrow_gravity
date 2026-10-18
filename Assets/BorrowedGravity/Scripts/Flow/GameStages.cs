@@ -35,6 +35,34 @@ namespace BorrowGravity
 
         public bool Has(int index) => index >= 0 && index < roots.Length && roots[index] != null;
 
+        /// <summary>
+        /// Before a level comes on: keep only as many astronauts as there are players, switch on their powers
+        /// (A/C gravity, B/D nullify, solo both — nullify on the second button) and, without a room, pick the camera
+        /// layout (solo full screen). Online, NetWorld gives each device its own player's camera.
+        /// </summary>
+        public static void ApplyPlayers(StageRoot root)
+        {
+            int count = Mathf.Clamp(GameFlow.PlayerCount, 1, GameFlow.MaxPlayers);
+            foreach (var pc in root.GetComponentsInChildren<PlayerController>(true))
+            {
+                int i = pc.playerIndex;
+                bool on = i < count;
+                pc.gameObject.SetActive(on);
+                var gp = pc.GetComponent<GravityPower>();
+                var np = pc.GetComponent<NullifyPower>();
+                bool sim = !NetSession.IsClient; // a joining phone only mirrors the host's powers
+                if (gp != null) gp.enabled = sim && on && GameFlow.HasGravity(i);
+                if (np != null) { np.enabled = sim && on && GameFlow.HasNullify(i); np.useSecondary = GameFlow.Solo; }
+                var link = pc.GetComponent<PlayerCameraLink>();
+                var cam = link != null ? link.view : null;
+                if (cam == null) continue;
+                if (NetSession.Online) { cam.gameObject.SetActive(on); continue; } // NetWorld picks this device's one
+                bool show = on && (count == 1 ? i == 0 : i <= 1);
+                cam.gameObject.SetActive(show);
+                if (show) cam.rect = count == 1 ? new Rect(0f, 0f, 1f, 1f) : new Rect(i == 0 ? 0f : 0.5f, 0f, 0.5f, 1f);
+            }
+        }
+
         public void Show(int index)
         {
             if (!Has(index)) index = 1;
@@ -45,6 +73,7 @@ namespace BorrowGravity
                 if (roots[i] != null && i != index && roots[i].gameObject.activeSelf) roots[i].gameObject.SetActive(false);
             var root = roots[index];
             root.ApplyLighting();
+            ApplyPlayers(root);
             root.gameObject.SetActive(true);
             Current = index;
             GameFlow.PendingStage = index;

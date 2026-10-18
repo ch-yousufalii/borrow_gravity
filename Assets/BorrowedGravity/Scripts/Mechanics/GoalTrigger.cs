@@ -35,7 +35,7 @@ namespace BorrowGravity
             if (done) return;
             inside.RemoveWhere(p => p == null);
             if (inside.Count == 0) return;
-            bool players = inside.Count >= requiredPlayers;
+            bool players = inside.Count >= Mathf.Max(1, Mathf.Min(requiredPlayers <= 2 ? Players.All.Count : requiredPlayers, Players.All.Count));
             bool condition = extraCondition == null || extraCondition.IsOn;
             if (players && condition)
             {

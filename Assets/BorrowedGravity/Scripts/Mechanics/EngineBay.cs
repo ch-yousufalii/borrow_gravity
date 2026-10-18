@@ -17,7 +17,8 @@ namespace BorrowGravity
         int installed;
         Material indicatorMat;
 
-        public override bool IsOn => installed >= 2;
+        /// <summary>On when every engine part in play (one per carrying player) is installed.</summary>
+        public override bool IsOn => installed > 0 && installed >= EnginePart.All.Count;
 
         void Awake()
         {

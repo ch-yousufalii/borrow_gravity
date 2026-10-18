@@ -23,11 +23,25 @@ namespace BorrowGravity
         /// <summary>The level the Game scene shows when it (re)loads: 0 intro, 1-3 stages, 4 ending.</summary>
         public static int PendingStage = 1;
 
+        public const int MaxPlayers = 4;
+
+        /// <summary>How many astronauts play (1-4): chosen by whoever starts the game / hosts the room.</summary>
+        public static int PlayerCount = 2;
+
+        public static bool Solo => PlayerCount <= 1;
+
+        /// <summary>A and C bend gravity, B and D nullify; a solo player has both powers.</summary>
+        public static bool HasGravity(int playerIndex) => Solo || playerIndex % 2 == 0;
+        public static bool HasNullify(int playerIndex) => Solo || playerIndex % 2 == 1;
+
+        public static string Letter(int playerIndex) => ((char)('A' + Mathf.Clamp(playerIndex, 0, MaxPlayers - 1))).ToString();
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
         {
             ShowIntro = true;
             PendingStage = 1;
+            PlayerCount = 2;
         }
 
         /// <summary>Phones default to 30 fps and dim the screen while you only touch it: run at 60 and stay awake.</summary>

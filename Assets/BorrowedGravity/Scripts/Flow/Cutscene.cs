@@ -48,6 +48,14 @@ namespace BorrowGravity
         public SfxId sound;
     }
 
+    /// <summary>Something in the cutscene that belongs to one player (their astronaut, their engine half).</summary>
+    [Serializable]
+    public class CutsceneSeat
+    {
+        public int player;
+        public GameObject target;
+    }
+
     /// <summary>
     /// Plays the opening cinematic: camera keys (eased dolly with a little handheld sway), actor moves, cues
     /// (particles, shakes, sounds), subtitles and fades, then hands over to Stage 1. Hold Space / Enter / Esc to skip.
@@ -69,6 +77,9 @@ namespace BorrowGravity
         [Tooltip("The ending: when it finishes, go back to the main menu instead of into Stage 1.")]
         public bool isEnding;
         public float handheld = 0.25f;
+        [Tooltip("Per-player objects: hidden when fewer players are in the game (a 3-player game shows 3 astronauts).")]
+        public List<CutsceneSeat> seats = new List<CutsceneSeat>();
+        readonly HashSet<GameObject> hidden = new HashSet<GameObject>();
 
         float t, skip, shakeAmount, shakeUntil, flashUntil;
         int nextCue, nextLine;
@@ -79,6 +90,10 @@ namespace BorrowGravity
             if (cam == null) cam = Camera.main;
             cues.Sort((a, b) => a.time.CompareTo(b.time));
             foreach (var c in cues) if (c.type == CueType.Activate && c.target != null) c.target.SetActive(false);
+            foreach (var seat in seats)
+                if (seat.target != null && seat.player >= GameFlow.PlayerCount) { hidden.Add(seat.target); seat.target.SetActive(false); }
+            // solo: B isn't there, so B's lines come over the radio
+            if (GameFlow.Solo) foreach (var l in lines) if (l.speaker == "B") l.speaker = "COMMS";
             Sfx.SetLoop(LoopId.Ambience, true, 0.4f);
             Sfx.SetLoop(LoopId.Drone, true, 0.3f); // low cinematic bed under the whole cutscene
             lines.Sort((a, b) => a.time.CompareTo(b.time));
@@ -131,7 +146,7 @@ namespace BorrowGravity
         {
             switch (c.type)
             {
-                case CueType.Activate: if (c.target != null) c.target.SetActive(true); break;
+                case CueType.Activate: if (c.target != null && !hidden.Contains(c.target)) c.target.SetActive(true); break;
                 case CueType.Deactivate: if (c.target != null) c.target.SetActive(false); break;
                 case CueType.Shake: shakeAmount = c.amount; shakeUntil = t + 0.6f + c.amount * 0.4f; break;
                 case CueType.Sound: Sfx.Play(c.sound, Mathf.Clamp01(c.amount)); break;

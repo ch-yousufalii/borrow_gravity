@@ -13,10 +13,10 @@ using UnityEngine.SceneManagement;
 namespace BorrowGravity
 {
     /// <summary>
-    /// Two-phone play over the local network (same Wi-Fi or one phone's hotspot) with no server: the host creates a
-    /// room with a 4-digit code, the other phone types the code (or the host's IP) and finds it by UDP broadcast.
-    /// The host runs the whole game and plays A; the joining phone plays B, sends its controls and mirrors the host's
-    /// world (<see cref="NetWorld"/>), HUD and sounds. Offline (the default) nothing here runs.
+    /// Phone rooms for 2-4 players with no server of our own: the host creates a room (an internet code through Unity
+    /// Relay, or a 4-digit same-Wi-Fi code found by UDP broadcast), the others type it in. The host runs the whole game
+    /// and plays A; each guest gets the next letter (B, C, D), sends its controls and mirrors the host's world
+    /// (<see cref="NetWorld"/>), HUD and sounds. Offline (the default) nothing here runs.
     /// </summary>
     public class NetSession : MonoBehaviour
     {
@@ -33,30 +33,49 @@ namespace BorrowGravity
         public static bool Online => Mode != NetMode.Offline;
         public static bool IsHost => Mode == NetMode.Host;
         public static bool IsClient => Mode == NetMode.Client;
+        /// <summary>Host: at least one guest is in. Client: in the room.</summary>
         public static bool Connected => Status == NetStatus.Connected;
-        /// <summary>The player this device controls: A (0) on the host, B (1) on the joining phone.</summary>
-        public static int LocalPlayer => IsClient ? 1 : 0;
+        /// <summary>The player this device controls: A (0) on the host, the letter the host gave a guest otherwise.</summary>
+        public static int LocalPlayer => IsClient ? localIndex : 0;
+        /// <summary>Players in the room right now, the host included.</summary>
+        public static int Joined => IsHost ? 1 + peers.Count : (Connected ? Mathf.Max(joined, localIndex + 1) : 0);
+        /// <summary>Every seat the host opened is taken.</summary>
+        public static bool Full => Joined >= GameFlow.PlayerCount;
         /// <summary>True while the client is loading a scene the host told it to.</summary>
         public static bool ApplyingRemote { get; private set; }
+
+        /// <summary>A guest as the host sees it: its address, its player letter and its latest controls.</summary>
+        class Peer
+        {
+            public IPEndPoint ep;
+            public int index;
+            public float lastReceive;
+            public Vector2 move;
+            public bool jump, power, jumpPulse, powerPulse, gotInput, lastJumpOut, lastPowerOut;
+            public byte jumpCount, powerCount;
+        }
 
         static NetSession runner;
         static UdpClient udp;
         static Thread thread;
         static volatile bool running;
         static readonly ConcurrentQueue<(byte[] data, IPEndPoint from)> inbox = new ConcurrentQueue<(byte[], IPEndPoint)>();
-        static IPEndPoint peer;
+        static readonly List<Peer> peers = new List<Peer>(); // host: the guests
+        static IPEndPoint hostEp;                              // client: the host
+        static int localIndex = 1, joined;
 
-        // internet rooms (Unity Relay): packets arrive through RelayLink and are tagged with this stand-in address
+        // internet rooms (Unity Relay): packets arrive through RelayLink, tagged with a stand-in address per slot
         static bool viaRelay;
-        static readonly IPEndPoint RelayPeer = new IPEndPoint(IPAddress.Parse("10.255.255.1"), 1);
+        static readonly IPAddress RelayAddress = IPAddress.Parse("10.255.255.1");
+        static IPEndPoint RelaySlot(int slot) => new IPEndPoint(RelayAddress, slot + 1);
         /// <summary>True while the room runs through Unity Relay (works across different networks).</summary>
         public static bool ViaRelay => viaRelay;
         /// <summary>True while an internet room is being created / joined.</summary>
         public static bool Busy { get; private set; }
 
         /// <summary>
-        /// Host a room: an internet room through Unity Relay when it is available (code like "K7Q2XD"),
-        /// otherwise a same-Wi-Fi room (4-digit code).
+        /// Host a room for <see cref="GameFlow.PlayerCount"/> players: an internet room through Unity Relay when it is
+        /// available (code like "K7Q2XD"), otherwise a same-Wi-Fi room (4-digit code).
         /// </summary>
         public static async void HostRoom()
         {
@@ -65,7 +84,7 @@ namespace BorrowGravity
             LastError = "";
             try
             {
-                string code = await RelayLink.HostAsync();
+                string code = await RelayLink.HostAsync(GameFlow.PlayerCount - 1);
                 Mode = NetMode.Host;
                 Status = NetStatus.Waiting;
                 RoomCode = code.ToUpperInvariant();
@@ -90,7 +109,7 @@ namespace BorrowGravity
             {
                 await RelayLink.JoinAsync(code);
                 BeginRelay();
-                peer = RelayPeer;
+                hostEp = RelaySlot(0);
             }
             catch (Exception e)
             {
@@ -113,28 +132,29 @@ namespace BorrowGravity
             LastError = "";
             Application.runInBackground = true;
             LocalAddress = "";
-            gotInput = false;
-            lastReceive = Time.realtimeSinceStartup;
-            NetHud.Clear();
+            ResetRoom();
             EnsureRunner();
         }
 
-        static void OnRelayData(byte[] data)
+        static void OnRelayData(int slot, byte[] data)
         {
-            if (data.Length >= 2 && data[0] == Magic) inbox.Enqueue((data, RelayPeer));
+            if (data.Length >= 2 && data[0] == Magic) inbox.Enqueue((data, RelaySlot(slot)));
         }
 
-        static void OnRelayConnected()
+        static void OnRelayConnected(int slot)
         {
-            if (!IsClient) return;
-            peer = RelayPeer;
+            if (!IsClient) return; // the host waits for the guest's Hello
+            hostEp = RelaySlot(slot);
             Write(NetMsg.Hello); writer.Write(joinTarget);
-            SendTo(peer);
+            SendTo(hostEp);
         }
 
-        static void OnRelayDisconnected()
+        static void OnRelayDisconnected(int slot)
         {
-            if (Online) Lose(IsHost ? "The other player left the room" : "Lost connection to the room");
+            if (!Online) return;
+            if (IsClient) { Lose("Lost connection to the room"); return; }
+            var p = Find(RelaySlot(slot));
+            if (p != null) Drop(p, "left the room");
         }
 
         static void EnsureRunner()
@@ -145,15 +165,9 @@ namespace BorrowGravity
             runner = go.AddComponent<NetSession>();
         }
         static string joinTarget = "";
-        static float lastReceive, nextSearch, nextPing, nextInput;
+        static float lastReceive, nextSearch, nextSweep, nextPing, nextInput;
 
-        // remote B input as seen by the host
-        static Vector2 rMove;
-        static bool rJump, rPower, jumpPulse, powerPulse;
-        static byte rJumpCount, rPowerCount;
-        static bool gotInput;
-
-        // local B input as sent by the client
+        // local input as sent by a guest
         static byte lJumpCount, lPowerCount;
 
         // test switches for a headless joining copy: -bgmove X (hold the stick at X) and -bgjump S (jump every S seconds)
@@ -169,8 +183,22 @@ namespace BorrowGravity
             Mode = NetMode.Offline;
             Status = NetStatus.Idle;
             RoomCode = joinTarget = LastError = "";
-            peer = null;
+            peers.Clear();
+            hostEp = null;
+            localIndex = 1;
+            joined = 0;
             runner = null;
+        }
+
+        static void ResetRoom()
+        {
+            peers.Clear();
+            hostEp = null;
+            localIndex = 1;
+            joined = 0;
+            lastReceive = Time.realtimeSinceStartup;
+            nextSearch = nextSweep = 0f;
+            NetHud.Clear();
         }
 
         // ---------- starting / stopping ----------
@@ -198,7 +226,7 @@ namespace BorrowGravity
             return true;
         }
 
-        /// <summary>Join by room code (found by broadcast) or by the host's IP address.</summary>
+        /// <summary>Join by room code (internet code, or a same-Wi-Fi code found on the network) or by the host's IP.</summary>
         public static bool StartClient(string codeOrAddress)
         {
             Stop();
@@ -232,11 +260,7 @@ namespace BorrowGravity
             LastError = "";
             Application.runInBackground = true; // the host must keep simulating (and answering) when its window isn't focused
             LocalAddress = FindLocalAddress();
-            peer = null;
-            gotInput = false;
-            lastReceive = Time.realtimeSinceStartup;
-            nextSearch = 0f;
-            NetHud.Clear();
+            ResetRoom();
             AcquireMulticastLock();
             running = true;
             thread = new Thread(ReceiveLoop) { IsBackground = true, Name = "BG-Net" };
@@ -247,16 +271,16 @@ namespace BorrowGravity
         public static void Stop()
         {
             if (Mode == NetMode.Offline && udp == null && !RelayLink.Active) return;
-            if (peer != null) { Write(NetMsg.Bye); SendTo(peer); }
+            Write(NetMsg.Bye); Send();
             RelayLink.Shutdown();
             viaRelay = false;
             CloseSocket();
             ReleaseMulticastLock();
             Mode = NetMode.Offline;
             Status = NetStatus.Idle;
-            peer = null;
             RoomCode = "";
-            NetHud.Clear();
+            ResetRoom();
+            for (int i = 1; i < GameFlow.MaxPlayers; i++) VirtualInput.Set(i, Vector2.zero, false, false);
         }
 
         static void CloseSocket()
@@ -316,29 +340,36 @@ namespace BorrowGravity
             }
             if (!Online) return;
 
-            if (IsClient && !viaRelay && Status == NetStatus.Searching && now >= nextSearch)
-            {
-                nextSearch = now + 0.4f;
-                if (joinTarget.Contains(".") && IPAddress.TryParse(joinTarget, out var ip))
-                {
-                    Write(NetMsg.Hello); writer.Write("");
-                    SendTo(new IPEndPoint(ip, Port));
-                }
-                else
-                {
-                    Write(NetMsg.Query); writer.Write(joinTarget);
-                    foreach (var b in BroadcastTargets()) SendTo(b);
-                }
-            }
+            if (IsClient && !viaRelay && Status == NetStatus.Searching) Search(now);
 
-            if (Connected)
+            if (Connected && now >= nextPing) { nextPing = now + 1f; Write(NetMsg.Ping); Send(); }
+            if (IsClient && Connected && now - lastReceive > TimeoutSeconds) { Lose("Lost connection to the room"); return; }
+            if (IsHost)
             {
-                if (now >= nextPing) { nextPing = now + 1f; Write(NetMsg.Ping); SendTo(peer); }
-                if (now - lastReceive > TimeoutSeconds) Lose("Lost connection to the other phone");
+                for (int i = peers.Count - 1; i >= 0; i--)
+                    if (now - peers[i].lastReceive > TimeoutSeconds) { Drop(peers[i], "lost connection"); if (!Online) return; }
+                foreach (var p in peers) if (p.gotInput) FeedRemoteInput(p);
             }
+            if (IsClient && Connected && now >= nextInput) { nextInput = now + 1f / 30f; SendInput(); }
+        }
 
-            if (IsHost && gotInput) FeedRemoteInput();
-            if (IsClient && Connected && now >= nextInput) { nextInput = now + 1f / 30f; SendInput(false); }
+        /// <summary>Client, same-Wi-Fi: ask the network for the room (broadcast, plus every address on our subnet
+        /// one by one — some phones and hotspots never pass broadcasts on).</summary>
+        static void Search(float now)
+        {
+            if (now < nextSearch) return;
+            nextSearch = now + 0.4f;
+            if (joinTarget.Contains(".") && IPAddress.TryParse(joinTarget, out var ip))
+            {
+                Write(NetMsg.Hello); writer.Write("");
+                SendTo(new IPEndPoint(ip, Port));
+                return;
+            }
+            Write(NetMsg.Query); writer.Write(joinTarget);
+            foreach (var b in BroadcastTargets()) SendTo(b);
+            if (now < nextSweep) return;
+            nextSweep = now + 1.5f;
+            foreach (var e in SubnetTargets()) SendTo(e);
         }
 
         static void Lose(string why)
@@ -349,6 +380,52 @@ namespace BorrowGravity
             if (SceneManager.GetActiveScene().name != GameFlow.MenuScene) GameFlow.LoadMenu();
         }
 
+        /// <summary>Host: a guest left. In the lobby its seat opens again; mid-game the level can't be finished
+        /// without it, so everyone goes back to the menu.</summary>
+        static void Drop(Peer p, string why)
+        {
+            peers.Remove(p);
+            VirtualInput.Set(p.index, Vector2.zero, false, false);
+            string who = "Player " + GameFlow.Letter(p.index) + " " + why;
+            if (SceneManager.GetActiveScene().name != GameFlow.MenuScene) { Lose(who); return; }
+            LastError = who;
+            if (peers.Count == 0) Status = NetStatus.Waiting;
+            SendLobby();
+        }
+
+        static Peer Find(IPEndPoint ep)
+        {
+            foreach (var p in peers) if (p.ep.Equals(ep)) return p;
+            return null;
+        }
+
+        static int FreeSeat()
+        {
+            for (int i = 1; i < GameFlow.PlayerCount; i++)
+            {
+                bool taken = false;
+                foreach (var p in peers) taken |= p.index == i;
+                if (!taken) return i;
+            }
+            return -1;
+        }
+
+        /// <summary>Host: tell every guest how many are in and how many seats there are.</summary>
+        static void SendLobby()
+        {
+            if (!IsHost) return;
+            Write(NetMsg.Lobby); writer.Write((byte)Joined); writer.Write((byte)GameFlow.PlayerCount);
+            Send();
+        }
+
+        /// <summary>Host: start with whoever is in (fewer seats than opened is fine).</summary>
+        public static void LockRoom()
+        {
+            if (!IsHost) return;
+            GameFlow.PlayerCount = Joined;
+            SendLobby();
+        }
+
         // ---------- messages in ----------
 
         static void Handle(byte[] data, IPEndPoint from)
@@ -356,74 +433,101 @@ namespace BorrowGravity
             using var ms = new MemoryStream(data, 2, data.Length - 2, false);
             using var r = new BinaryReader(ms, Encoding.UTF8);
             var type = (NetMsg)data[1];
-            bool fromPeer = peer != null && peer.Equals(from);
-            if (fromPeer) lastReceive = Time.realtimeSinceStartup;
+            if (IsHost) HandleHost(type, r, from);
+            else HandleClient(type, r, from);
+        }
 
-            if (IsHost)
+        static void HandleHost(NetMsg type, BinaryReader r, IPEndPoint from)
+        {
+            var peer = Find(from);
+            if (peer != null) peer.lastReceive = Time.realtimeSinceStartup;
+            switch (type)
             {
-                switch (type)
+                case NetMsg.Query:
+                    if (r.ReadString() == RoomCode) { Write(NetMsg.Answer); writer.Write(RoomCode); SendTo(from); }
+                    return;
+                case NetMsg.Hello:
                 {
-                    case NetMsg.Query:
-                        if (r.ReadString() == RoomCode && (peer == null || fromPeer)) { Write(NetMsg.Answer); writer.Write(RoomCode); SendTo(from); }
-                        return;
-                    case NetMsg.Hello:
+                    string code = r.ReadString();
+                    if (code != RoomCode && code != "") return;
+                    bool inGame = SceneManager.GetActiveScene().name != GameFlow.MenuScene;
+                    if (peer == null)
                     {
-                        string code = r.ReadString();
-                        if ((code == RoomCode || code == "") && (peer == null || fromPeer))
-                        {
-                            peer = from;
-                            Status = NetStatus.Connected;
-                            lastReceive = Time.realtimeSinceStartup;
-                            Write(NetMsg.Welcome); writer.Write(RoomCode);
-                            SendTo(peer);
-                            Sfx.Play(SfxId.Checkpoint, 0.7f);
-                            // already in a stage (the other phone rejoined)? send it there
-                            var active = SceneManager.GetActiveScene().name;
-                            if (active != GameFlow.MenuScene) SendScene(active, GameFlow.ShowIntro);
-                            if (GameStages.Instance != null) SendStage(GameStages.Instance.Current, GameFlow.ShowIntro);
-                        }
-                        return;
+                        int seat = FreeSeat();
+                        if (seat < 0 || inGame) { Write(NetMsg.Full); SendTo(from); return; }
+                        peer = new Peer { ep = from, index = seat, lastReceive = Time.realtimeSinceStartup };
+                        peers.Add(peer);
+                        Sfx.Play(SfxId.Checkpoint, 0.7f);
                     }
+                    Status = NetStatus.Connected;
+                    Write(NetMsg.Welcome); writer.Write(RoomCode); writer.Write((byte)peer.index); writer.Write((byte)GameFlow.PlayerCount);
+                    SendTo(from);
+                    SendLobby();
+                    // already in a stage (the guest rejoined)? send it there
+                    if (inGame)
+                    {
+                        Write(NetMsg.Scene); writer.Write(SceneManager.GetActiveScene().name); writer.Write(GameFlow.ShowIntro); writer.Write((byte)GameFlow.PlayerCount);
+                        SendTo(from);
+                        if (GameStages.Instance != null) SendStage(GameStages.Instance.Current, GameFlow.ShowIntro);
+                    }
+                    return;
                 }
-                if (!fromPeer) return;
-                switch (type)
-                {
-                    case NetMsg.Input: ReadInput(r); break;
-                    case NetMsg.Action: DoAction((NetAction)r.ReadByte(), r.ReadByte()); break;
-                    case NetMsg.Bye: Lose("The other player left the room"); break;
-                }
-                return;
             }
+            if (peer == null) return;
+            switch (type)
+            {
+                case NetMsg.Input: ReadInput(peer, r); break;
+                case NetMsg.Action: DoAction((NetAction)r.ReadByte(), r.ReadByte()); break;
+                case NetMsg.Bye: Drop(peer, "left the room"); break;
+            }
+        }
 
-            // client
+        static void HandleClient(NetMsg type, BinaryReader r, IPEndPoint from)
+        {
+            bool fromHost = hostEp != null && hostEp.Equals(from);
+            if (fromHost) lastReceive = Time.realtimeSinceStartup;
             switch (type)
             {
                 case NetMsg.Answer:
                     if (Status == NetStatus.Searching && r.ReadString() == joinTarget)
                     {
-                        peer = from;
+                        hostEp = from;
                         Write(NetMsg.Hello); writer.Write(joinTarget);
-                        SendTo(peer);
+                        SendTo(hostEp);
                     }
                     return;
                 case NetMsg.Welcome:
-                    if (Status != NetStatus.Connected && (peer == null || peer.Address.Equals(from.Address)))
+                    if (hostEp == null || hostEp.Address.Equals(from.Address))
                     {
-                        peer = from;
+                        hostEp = from;
                         RoomCode = r.ReadString();
+                        localIndex = Mathf.Clamp(r.ReadByte(), 1, GameFlow.MaxPlayers - 1);
+                        GameFlow.PlayerCount = Mathf.Clamp(r.ReadByte(), 2, GameFlow.MaxPlayers);
+                        if (Status != NetStatus.Connected) Sfx.Play(SfxId.Checkpoint, 0.7f);
                         Status = NetStatus.Connected;
                         lastReceive = Time.realtimeSinceStartup;
-                        Sfx.Play(SfxId.Checkpoint, 0.7f);
+                    }
+                    return;
+                case NetMsg.Full:
+                    if (Status == NetStatus.Searching)
+                    {
+                        Stop();
+                        LastError = "Room " + joinTarget + " is full (or already playing)";
                     }
                     return;
             }
-            if (!fromPeer) return;
+            if (!fromHost) return;
             switch (type)
             {
+                case NetMsg.Lobby:
+                    joined = r.ReadByte();
+                    GameFlow.PlayerCount = Mathf.Clamp(r.ReadByte(), 1, GameFlow.MaxPlayers);
+                    break;
                 case NetMsg.Scene:
                 {
                     string scene = r.ReadString();
                     GameFlow.ShowIntro = r.ReadBoolean();
+                    if (r.BaseStream.Position < r.BaseStream.Length) GameFlow.PlayerCount = r.ReadByte();
                     ApplyingRemote = true;
                     Time.timeScale = 1f;
                     Sfx.StopAllLoops();
@@ -434,6 +538,7 @@ namespace BorrowGravity
                 {
                     int stage = r.ReadInt32();
                     GameFlow.ShowIntro = r.ReadBoolean();
+                    if (r.BaseStream.Position < r.BaseStream.Length) GameFlow.PlayerCount = r.ReadByte();
                     GameFlow.PendingStage = stage;
                     // already in the Game scene: switch now; otherwise the scene shows it when it finishes loading
                     var gs = GameStages.Instance;
@@ -465,13 +570,13 @@ namespace BorrowGravity
             }
         }
 
-        static void SendInput(bool force)
+        /// <summary>Guest: this device's controls (touch for its own letter, plus either keyboard set) to the host.</summary>
+        static void SendInput()
         {
-            var b = Players.Get(1);
-            var a = Players.Get(0);
-            Vector2 move = VirtualInput.Move(1);
-            bool jump = VirtualInput.JumpHeld(1), power = VirtualInput.PowerHeld(1);
-            foreach (var p in new[] { a, b })
+            int me = LocalPlayer;
+            Vector2 move = VirtualInput.Move(me);
+            bool jump = VirtualInput.JumpHeld(me), power = VirtualInput.PowerHeld(me);
+            foreach (var p in Players.All)
             {
                 if (p == null) continue;
                 move += p.keys.ReadMove();
@@ -486,17 +591,19 @@ namespace BorrowGravity
             writer.Write((byte)((jump ? 1 : 0) | (power ? 2 : 0)));
             writer.Write(lJumpCount);
             writer.Write(lPowerCount);
-            // B's stick is relative to B's own camera on this phone: tell the host which way it faces
-            Vector3 view = b != null && b.ViewCamera != null ? b.ViewCamera.transform.forward : Vector3.zero;
+            // the stick is relative to this player's own camera on this phone: tell the host which way it faces
+            var mine = Players.Get(me);
+            Vector3 view = mine != null && mine.ViewCamera != null ? mine.ViewCamera.transform.forward : Vector3.zero;
             writer.Write(view.x); writer.Write(view.y); writer.Write(view.z);
-            SendTo(peer);
+            SendTo(hostEp);
         }
 
-        /// <summary>Client: count presses as they happen so even a tap shorter than a packet reaches the host.</summary>
+        /// <summary>Guest: count presses as they happen so even a tap shorter than a packet reaches the host.</summary>
         void LateUpdate()
         {
             if (!IsClient || !Connected) return;
-            bool jumpDown = VirtualInput.JumpPressed(1), powerDown = VirtualInput.PowerPressed(1);
+            int me = LocalPlayer;
+            bool jumpDown = VirtualInput.JumpPressed(me), powerDown = VirtualInput.PowerPressed(me);
             foreach (var p in Players.All)
             {
                 if (p == null) continue;
@@ -505,41 +612,39 @@ namespace BorrowGravity
             }
             if (jumpDown) lJumpCount++;
             if (powerDown) lPowerCount++;
-            if (jumpDown || powerDown) SendInput(true);
+            if (jumpDown || powerDown) SendInput();
         }
 
-        static void ReadInput(BinaryReader r)
+        static void ReadInput(Peer p, BinaryReader r)
         {
-            rMove = new Vector2(r.ReadSByte() / 127f, r.ReadSByte() / 127f);
+            p.move = new Vector2(r.ReadSByte() / 127f, r.ReadSByte() / 127f);
             byte f = r.ReadByte();
-            rJump = (f & 1) != 0;
-            rPower = (f & 2) != 0;
+            p.jump = (f & 1) != 0;
+            p.power = (f & 2) != 0;
             byte jc = r.ReadByte(), pc = r.ReadByte();
-            if (gotInput && jc != rJumpCount) jumpPulse = true;
-            if (gotInput && pc != rPowerCount) powerPulse = true;
-            rJumpCount = jc;
-            rPowerCount = pc;
-            gotInput = true;
+            if (p.gotInput && jc != p.jumpCount) p.jumpPulse = true;
+            if (p.gotInput && pc != p.powerCount) p.powerPulse = true;
+            p.jumpCount = jc;
+            p.powerCount = pc;
+            p.gotInput = true;
             if (r.BaseStream.Position + 12 <= r.BaseStream.Length)
             {
                 var view = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
-                var b = Players.Get(1);
-                if (b != null) b.RemoteViewForward = view;
+                var player = Players.Get(p.index);
+                if (player != null) player.RemoteViewForward = view;
             }
         }
 
-        static bool lastJumpOut, lastPowerOut;
-
-        static void FeedRemoteInput()
+        static void FeedRemoteInput(Peer p)
         {
             // a press counted on the phone becomes one frame of "down" here, even if the button is already up again
-            bool jump = rJump || (jumpPulse && !lastJumpOut);
-            bool power = rPower || (powerPulse && !lastPowerOut);
-            if (jump && !lastJumpOut) jumpPulse = false;
-            if (power && !lastPowerOut) powerPulse = false;
-            lastJumpOut = jump;
-            lastPowerOut = power;
-            VirtualInput.Set(1, rMove, jump, power);
+            bool jump = p.jump || (p.jumpPulse && !p.lastJumpOut);
+            bool power = p.power || (p.powerPulse && !p.lastPowerOut);
+            if (jump && !p.lastJumpOut) p.jumpPulse = false;
+            if (power && !p.lastPowerOut) p.powerPulse = false;
+            p.lastJumpOut = jump;
+            p.lastPowerOut = power;
+            VirtualInput.Set(p.index, p.move, jump, power);
         }
 
         // ---------- actions (client -> host) ----------
@@ -550,7 +655,7 @@ namespace BorrowGravity
             Write(NetMsg.Action);
             writer.Write((byte)a);
             writer.Write((byte)arg);
-            SendTo(peer);
+            SendTo(hostEp);
         }
 
         static void DoAction(NetAction a, byte arg)
@@ -574,7 +679,8 @@ namespace BorrowGravity
             Write(NetMsg.Scene);
             writer.Write(scene);
             writer.Write(showIntro);
-            SendTo(peer);
+            writer.Write((byte)GameFlow.PlayerCount);
+            Send();
         }
 
         /// <summary>Host: a level was switched inside the Game scene.</summary>
@@ -584,49 +690,50 @@ namespace BorrowGravity
             Write(NetMsg.Stage);
             writer.Write(stage);
             writer.Write(showIntro);
-            SendTo(peer);
+            writer.Write((byte)GameFlow.PlayerCount);
+            Send();
         }
 
         public static void UiWarning(HudHazard hazard, string text, float countdown, float duration)
         {
             if (!BeginUi(UiEvt.Warning)) return;
             writer.Write((byte)hazard); writer.Write(text ?? ""); writer.Write(countdown); writer.Write(duration);
-            SendTo(peer);
+            Send();
         }
 
         public static void UiText(int kind, string text, float duration = 0f)
         {
             if (!BeginUi((UiEvt)kind)) return;
             writer.Write(text ?? ""); writer.Write(duration);
-            SendTo(peer);
+            Send();
         }
 
         public static void UiToast(int player, string text)
         {
             if (!BeginUi(UiEvt.Toast)) return;
             writer.Write((byte)player); writer.Write(text ?? "");
-            SendTo(peer);
+            Send();
         }
 
         public static void UiObjective(HudObjective o, string text)
         {
             if (!BeginUi(UiEvt.Objective)) return;
             writer.Write((byte)o); writer.Write(text ?? "");
-            SendTo(peer);
+            Send();
         }
 
         public static void UiCountdown(string label, HudHazard hazard, bool start)
         {
             if (!BeginUi(start ? UiEvt.CountdownStart : UiEvt.CountdownStop)) return;
             writer.Write(label ?? ""); writer.Write((byte)hazard);
-            SendTo(peer);
+            Send();
         }
 
         public static void UiShake(float amount, float duration)
         {
             if (!BeginUi(UiEvt.Shake)) return;
             writer.Write(amount); writer.Write(duration);
-            SendTo(peer);
+            Send();
         }
 
         static bool BeginUi(UiEvt e)
@@ -663,7 +770,7 @@ namespace BorrowGravity
             if (!ForwardSounds) return;
             Write(NetMsg.Sfx);
             writer.Write((byte)SfxEvt.Play); writer.Write((byte)id); writer.Write(volume); writer.Write(pitch);
-            SendTo(peer);
+            Send();
         }
 
         public static void ForwardLoop(LoopId id, bool on, float volume)
@@ -671,7 +778,7 @@ namespace BorrowGravity
             if (!ForwardSounds) return;
             Write(NetMsg.Sfx);
             writer.Write((byte)SfxEvt.Loop); writer.Write((byte)id); writer.Write(on); writer.Write(volume);
-            SendTo(peer);
+            Send();
         }
 
         public static void ForwardStopLoops()
@@ -679,7 +786,7 @@ namespace BorrowGravity
             if (!ForwardSounds) return;
             Write(NetMsg.Sfx);
             writer.Write((byte)SfxEvt.StopLoops);
-            SendTo(peer);
+            Send();
         }
 
         static void ReadSfx(BinaryReader r)
@@ -704,16 +811,22 @@ namespace BorrowGravity
 
         internal static long WrittenBytes => outStream.Length;
 
-        internal static void SendToPeer()
+        /// <summary>The packet just written goes to every guest (host) or to the host (guest).</summary>
+        internal static void Send()
         {
-            if (peer != null) SendTo(peer);
+            if (IsHost) { foreach (var p in peers) SendTo(p.ep); }
+            else if (hostEp != null) SendTo(hostEp);
         }
 
         static void SendTo(IPEndPoint to)
         {
             if (to == null) return;
             writer.Flush();
-            if (viaRelay) { RelayLink.Send(outStream.GetBuffer(), (int)outStream.Length); return; }
+            if (viaRelay)
+            {
+                if (to.Address.Equals(RelayAddress)) RelayLink.Send(to.Port - 1, outStream.GetBuffer(), (int)outStream.Length);
+                return;
+            }
             if (udp == null) return;
             try { udp.Send(outStream.GetBuffer(), (int)outStream.Length, to); }
             catch (Exception) { /* unreachable broadcast address etc. */ }
@@ -774,6 +887,18 @@ namespace BorrowGravity
                 }
             }
             return list;
+        }
+
+        /// <summary>Every other address on our /24 network, for phones and hotspots that drop broadcasts.</summary>
+        static IEnumerable<IPEndPoint> SubnetTargets()
+        {
+            if (!IPAddress.TryParse(LocalAddress, out var own)) yield break;
+            var b = own.GetAddressBytes();
+            for (int i = 1; i < 255; i++)
+            {
+                if (i == b[3]) continue;
+                yield return new IPEndPoint(new IPAddress(new[] { b[0], b[1], b[2], (byte)i }), Port);
+            }
         }
 
         // Android drops broadcast packets unless the app holds a multicast lock.

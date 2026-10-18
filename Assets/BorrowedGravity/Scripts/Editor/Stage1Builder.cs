@@ -322,6 +322,8 @@ namespace BorrowGravity.EditorTools
             // ---------- players, camera, systems ----------
             Astronaut(ctx, 0, start.GetSpawn(0));
             Astronaut(ctx, 1, start.GetSpawn(1));
+            Astronaut(ctx, 2, start.GetSpawn(2));
+            Astronaut(ctx, 3, start.GetSpawn(3));
             CoreObjects(ctx, 1, "STAGE 1 — THE SHATTERED ORBIT", HudObjective.ReachStation, "Reach the Station",
                 "Your ship's engine has died near a ruined orbital structure. The only replacement is inside an abandoned station — " +
                 "on the far side of a field of shattered wreckage.\n\nA bends gravity inside the glowing zones. B can freeze one object at a time and steer it.\nNeither of you can make it alone.",

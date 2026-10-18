@@ -5,7 +5,8 @@ using UnityEngine.InputSystem;
 namespace BorrowGravity
 {
     /// <summary>
-    /// On-screen joystick + JUMP + POWER for each player, in that player's half of the split screen.
+    /// On-screen joystick + JUMP + POWER for each player on this device: its own player full screen online or solo
+    /// (solo adds a second power button, NULLIFY), A and B side by side on a shared screen.
     /// Works with multi-touch and the mouse; feeds <see cref="VirtualInput"/>. J toggles it.
     /// </summary>
     public class VirtualControls : MonoBehaviour
@@ -24,20 +25,24 @@ namespace BorrowGravity
         class Stick { public int pointer = int.MinValue; public Vector2 center, home, knob, input; public Rect zone; }
         class Button { public Vector2 center; public bool held; }
 
-        readonly Stick[] sticks = { new Stick(), new Stick() };
-        readonly Button[] jumps = { new Button(), new Button() };
-        readonly Button[] powers = { new Button(), new Button() };
+        const int Max = GameFlow.MaxPlayers;
+        readonly Stick[] sticks = { new Stick(), new Stick(), new Stick(), new Stick() };
+        readonly Button[] jumps = { new Button(), new Button(), new Button(), new Button() };
+        readonly Button[] powers = { new Button(), new Button(), new Button(), new Button() };
+        readonly Button[] powers2 = { new Button(), new Button(), new Button(), new Button() };
         readonly List<(int id, Vector2 pos, bool began)> pointers = new List<(int, Vector2, bool)>();
         bool mouseWasDown;
         readonly Dictionary<int, (Vector2 last, int player)> lookPointers = new Dictionary<int, (Vector2, int)>();
         readonly HashSet<int> alive = new HashSet<int>();
 
-        /// <summary>Online each phone shows only its own player's controls, across the whole screen.</summary>
-        static bool Shows(int p) => !NetSession.Online || p == NetSession.LocalPlayer;
+        /// <summary>Online each phone shows only its own player's controls, across the whole screen; solo just A;
+        /// otherwise A and B share the screen.</summary>
+        static bool Shows(int p) => NetSession.Online ? p == NetSession.LocalPlayer : p < (GameFlow.Solo ? 1 : 2);
+        static bool FullScreen => NetSession.Online || GameFlow.Solo;
 
         // arrows mode: up, down, left, right (GUI y points down)
         static readonly Vector2[] ArrowDirs = { new Vector2(0f, -1f), new Vector2(0f, 1f), new Vector2(-1f, 0f), new Vector2(1f, 0f) };
-        readonly bool[,] arrowHeld = new bool[2, 4];
+        readonly bool[,] arrowHeld = new bool[Max, 4];
         float ArrowRadius => SR * 0.42f;
         Vector2 ArrowCenter(Stick st, int i) => st.home + ArrowDirs[i] * SR * 0.8f;
 
@@ -47,18 +52,19 @@ namespace BorrowGravity
 
         void Layout()
         {
-            float w = UIKit.Width, h = UIKit.Height, half = NetSession.Online ? w : w * 0.5f;
+            float w = UIKit.Width, h = UIKit.Height, half = FullScreen ? w : w * 0.5f;
             float sr = SR, br = BR;
             float y = h - 80f - sr;
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < Max; p++)
             {
-                float x0 = NetSession.Online ? 0f : p * half;
+                float x0 = FullScreen ? 0f : Mathf.Min(p, 1) * half;
                 sticks[p].home = new Vector2(x0 + 50f + sr, y);
                 // PUBG style: the left half of this player's screen is the joystick, the right half turns the camera
                 sticks[p].zone = new Rect(x0, 110f, half * 0.5f, h - 110f);
                 if (sticks[p].pointer == int.MinValue) sticks[p].center = sticks[p].home;
                 jumps[p].center = new Vector2(x0 + half - 44f - br, h - 112f - br * 0.4f);
                 powers[p].center = new Vector2(jumps[p].center.x - br * 2f - 18f, jumps[p].center.y - 40f * ControlSettings.ButtonSize);
+                powers2[p].center = new Vector2(jumps[p].center.x - br * 0.4f, jumps[p].center.y - br * 2f - 26f);
             }
         }
 
@@ -72,13 +78,15 @@ namespace BorrowGravity
             Look(s);
             if (!Visible)
             {
-                for (int p = 0; p < 2; p++) if (Shows(p)) VirtualInput.Set(p, Vector2.zero, false, false);
+                for (int p = 0; p < Max; p++) if (Shows(p)) { VirtualInput.Set(p, Vector2.zero, false, false); VirtualInput.SetPower2(p, false); }
                 return;
             }
 
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < Max; p++)
             {
-                if (!Shows(p)) continue; // the other player's input arrives over the network
+                if (!Shows(p)) continue; // the other players' input arrives over the network
+                powers2[p].held = GameFlow.Solo && Touching(powers2[p].center, int.MinValue);
+                VirtualInput.SetPower2(p, powers2[p].held);
                 var st = sticks[p];
                 if (ControlSettings.Movement == MoveStyle.Arrows)
                 {
@@ -131,25 +139,26 @@ namespace BorrowGravity
 
         // ---------- camera look: drag a finger (or the mouse) anywhere that isn't a control; or just move the mouse ----------
 
-        int PlayerAt(float x) => NetSession.Online ? NetSession.LocalPlayer : (x < UIKit.Width * 0.5f ? 0 : 1);
+        int PlayerAt(float x) => NetSession.Online ? NetSession.LocalPlayer : GameFlow.Solo ? 0 : (x < UIKit.Width * 0.5f ? 0 : 1);
 
         /// <summary>Not for the camera: the HUD strip, a player's joystick half, or a button.</summary>
         bool OnControl(Vector2 pos)
         {
             if (pos.y < 110f) return true; // power panels, objective banner, pause button
             if (!Visible) return false;
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < Max; p++)
                 if (Shows(p) && sticks[p].zone.Contains(pos)) return true;
             return OnButton(pos);
         }
 
         bool OnButton(Vector2 pos)
         {
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < Max; p++)
             {
                 if (!Shows(p)) continue;
                 if (Vector2.Distance(pos, jumps[p].center) < BR * 1.2f) return true;
                 if (Vector2.Distance(pos, powers[p].center) < BR * 1.2f) return true;
+                if (GameFlow.Solo && Vector2.Distance(pos, powers2[p].center) < BR * 1.2f) return true;
             }
             return false;
         }
@@ -223,7 +232,7 @@ namespace BorrowGravity
             if (sm != null && sm.State != StageState.Playing) return;
             UIKit.Begin();
             Layout();
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < Max; p++)
             {
                 if (!Shows(p)) continue;
                 var st = sticks[p];
@@ -248,9 +257,10 @@ namespace BorrowGravity
                     float k = 26f * ControlSettings.StickSize;
                     MenuStyle.Box(new Rect(knob.x - k, knob.y - k, k * 2f, k * 2f), st.pointer != int.MinValue ? 0.85f : 0.45f, 0f, k);
                 }
-                MenuStyle.Text(new Rect(st.home.x - 70, st.home.y + SR + 6, 140, 14), p == 0 ? "PLAYER A" : "PLAYER B", UIKit.Face.Heavy, 9, MenuStyle.W50, 0.3f);
+                MenuStyle.Text(new Rect(st.home.x - 70, st.home.y + SR + 6, 140, 14), "PLAYER " + GameFlow.Letter(p), UIKit.Face.Heavy, 9, MenuStyle.W50, 0.3f);
                 DrawButton(jumps[p], "JUMP");
-                DrawButton(powers[p], p == 0 ? "GRAVITY" : "NULLIFY");
+                DrawButton(powers[p], GameFlow.HasGravity(p) ? "GRAVITY" : "NULLIFY");
+                if (GameFlow.Solo) DrawButton(powers2[p], "NULLIFY");
             }
         }
 

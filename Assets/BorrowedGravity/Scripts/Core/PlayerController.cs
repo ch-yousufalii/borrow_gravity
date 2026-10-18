@@ -11,6 +11,8 @@ namespace BorrowGravity
         public Key up = Key.W, down = Key.S, left = Key.A, right = Key.D;
         public Key jump = Key.Space, jumpAlt = Key.None;
         public Key power = Key.E, powerAlt = Key.None;
+        [Tooltip("Second power (solo play: nullify).")]
+        public Key power2 = Key.Q;
 
         /// <summary>True if the key is held on any connected keyboard (so a second USB keyboard also works).</summary>
         public static bool Held(Key k)
@@ -166,6 +168,11 @@ namespace BorrowGravity
         public bool PowerPressed() => InputEnabled && ((KeyboardDrives && keys.PowerPressed()) || (AltKeys?.PowerPressed() ?? false) || VirtualInput.PowerPressed(playerIndex));
         public bool PowerHeld() => InputEnabled && ((KeyboardDrives && keys.PowerHeld()) || (AltKeys?.PowerHeld() ?? false) || VirtualInput.PowerHeld(playerIndex));
         public bool PowerReleased() => (KeyboardDrives && keys.PowerReleased()) || (AltKeys?.PowerReleased() ?? false) || VirtualInput.PowerReleased(playerIndex);
+
+        // second power button (solo play: nullify on Q / the second on-screen power button)
+        public bool Power2Pressed() => InputEnabled && ((KeyboardDrives && PlayerKeys.Pressed(keys.power2)) || VirtualInput.Power2Pressed(playerIndex));
+        public bool Power2Held() => InputEnabled && ((KeyboardDrives && PlayerKeys.Held(keys.power2)) || VirtualInput.Power2Held(playerIndex));
+        public bool Power2Released() => (KeyboardDrives && PlayerKeys.Released(keys.power2)) || VirtualInput.Power2Released(playerIndex);
 
         /// <summary>The camera that shows this player (its own split-screen camera when there is one).</summary>
         public Camera ViewCamera { get; set; }

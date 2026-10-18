@@ -24,6 +24,9 @@ namespace BorrowGravity
         PlayerController player;
         float cooldownUntil, pressTime = -1f;
 
+        [Tooltip("Use the second power button (solo play, where this player also has gravity on the first).")]
+        public bool useSecondary;
+
         void Awake() => player = GetComponent<PlayerController>();
 
         void OnDisable()
@@ -44,18 +47,18 @@ namespace BorrowGravity
             SetTarget(Active == null ? FindTarget() : null);
             if (!player.InputEnabled) return;
 
-            if (player.PowerPressed())
+            if (useSecondary ? player.Power2Pressed() : player.PowerPressed())
             {
                 pressTime = Time.time;
                 if (Active == null) TryActivate();
             }
-            else if (pressTime >= 0f && player.PowerHeld())
+            else if (pressTime >= 0f && (useSecondary ? player.Power2Held() : player.PowerHeld()))
             {
                 if (Active != null && Active.allowSteer && Time.time - pressTime >= holdToSteerDelay)
                     StartSteering();
             }
 
-            if (pressTime >= 0f && player.PowerReleased())
+            if (pressTime >= 0f && (useSecondary ? player.Power2Released() : player.PowerReleased()))
             {
                 bool wasTap = Time.time - pressTime < holdToSteerDelay;
                 if (Steering) StopSteering();
