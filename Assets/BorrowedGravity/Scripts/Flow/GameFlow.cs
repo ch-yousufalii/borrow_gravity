@@ -105,7 +105,7 @@ namespace BorrowGravity
             PendingStage = level;
             if (!SingleScene) { LoadSeparateScene(level); return; }
             var stages = GameStages.Instance;
-            if (stages != null && SceneManager.GetActiveScene().name == GameScene && stages.Has(level)) stages.Show(level);
+            if (stages != null && SceneManager.GetActiveScene().name == GameScene && stages.Has(level) && !stages.WasShown(level)) stages.Show(level);
             else Load(GameScene);
         }
 

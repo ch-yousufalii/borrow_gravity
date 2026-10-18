@@ -78,7 +78,7 @@ namespace BorrowGravity
             float d2 = to.sqrMagnitude;
             var sm = StageManager.Instance;
             bool playing = sm == null || !sm.isActiveAndEnabled || sm.State == StageState.Playing; // not behind the intro card / pause
-            bool near = playing && PlayerNearby() && d2 > hideCloserThan * hideCloserThan;
+            bool near = playing && Nearest() == this && d2 > hideCloserThan * hideCloserThan;
             if (near != shown)
             {
                 shown = near;
@@ -106,16 +106,63 @@ namespace BorrowGravity
             return text;
         }
 
-        /// <summary>One of the players on this device (its own online, A/B on a shared screen) is close.</summary>
-        bool PlayerNearby()
+        // only one board at a time (the closest to this device's players), so two boards never overlap
+        static readonly System.Collections.Generic.List<InfoBoard> boards = new System.Collections.Generic.List<InfoBoard>();
+        static InfoBoard nearest;
+        static int nearestFrame = -1;
+
+        void OnEnable() { if (!boards.Contains(this)) boards.Add(this); }
+        void OnDisable() => boards.Remove(this);
+
+        /// <summary>Where the board that is showing sits on screen (GUI units), so HUD markers can keep clear of it.</summary>
+        public static bool ShownRect(Camera cam, out Rect rect)
         {
-            float r2 = nearPlayer * nearPlayer;
+            rect = default;
+            var b = nearestFrame == Time.frameCount ? nearest : Nearest();
+            if (b == null || !b.shown || b.panel == null || cam == null) return false;
+            var r = b.panel.GetComponent<Renderer>();
+            if (r == null) return false;
+            var bounds = r.bounds;
+            float s = UIKit.Scale;
+            Vector2 min = new Vector2(float.MaxValue, float.MaxValue), max = new Vector2(float.MinValue, float.MinValue);
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                var sp = cam.WorldToScreenPoint(corner);
+                if (sp.z <= 0f) return false;
+                var g = new Vector2(sp.x / s, (Screen.height - sp.y) / s);
+                min = Vector2.Min(min, g);
+                max = Vector2.Max(max, g);
+            }
+            rect = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+            return true;
+        }
+
+        static InfoBoard Nearest()
+        {
+            if (nearestFrame == Time.frameCount) return nearest;
+            nearestFrame = Time.frameCount;
+            nearest = null;
+            float best = float.MaxValue;
+            foreach (var b in boards)
+            {
+                if (b == null) continue;
+                float d = b.PlayerDistanceSqr();
+                if (d < b.nearPlayer * b.nearPlayer && d < best) { best = d; nearest = b; }
+            }
+            return nearest;
+        }
+
+        /// <summary>Squared distance to the closest of this device's players (its own online, A/B on a shared screen).</summary>
+        float PlayerDistanceSqr()
+        {
+            float best = float.MaxValue;
             foreach (var p in Players.All)
             {
                 if (p == null || (NetSession.Online && p.playerIndex != NetSession.LocalPlayer)) continue;
-                if ((p.transform.position - transform.position).sqrMagnitude < r2) return true;
+                best = Mathf.Min(best, (p.transform.position - transform.position).sqrMagnitude);
             }
-            return false;
+            return best;
         }
     }
 }

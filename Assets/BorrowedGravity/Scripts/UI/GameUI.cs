@@ -141,13 +141,25 @@ namespace BorrowGravity
             DrawWorldMarkers();
             DrawPanels(w);
             DrawPauseButton(w, sm);
-            DrawAutoZoneWarning(w);
-            DrawCountdown(w);
-            DrawWarning(w);
-            DrawCheckpoint(w);
+            // the centre banners stack top-down in this order, so two at once never overlap
+            slot = 74f;
             DrawEngine(w, h);
             DrawMessages(w, h);
+            DrawWarning(w);
+            DrawAutoZoneWarning(w);
+            DrawCheckpoint(w);
+            DrawCountdown(w);
             DrawHelp(w, h, sm);
+        }
+
+        float slot;
+
+        /// <summary>The next free spot (top y) in the centre column of banners; the next one goes below it.</summary>
+        float Slot(float height)
+        {
+            float y = slot;
+            slot += height + 10f;
+            return y;
         }
 
         // ---------- frosted backdrop: a blurred still of the game behind the pause menu and the stage cards ----------
@@ -359,7 +371,7 @@ namespace BorrowGravity
                 if (p == null) continue;
                 var z = GravityZone.FindZone(p.transform.position, true);
                 if (z == null || !z.autoCycle || !z.AutoWarningActive) continue;
-                var r = new Rect(w * 0.5f - 190, 214, 380, 56);
+                var r = new Rect(w * 0.5f - 190, Slot(56), 380, 56);
                 float pulse = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(Time.time * 5f));
                 MenuStyle.Box(r, pulse, 1f);
                 MenuStyle.Brackets(r);
@@ -373,7 +385,7 @@ namespace BorrowGravity
         {
             if (countdownValue == null) return;
             float left = Mathf.Max(0f, countdownValue());
-            var c = new Vector2(w * 0.5f, 330);
+            var c = new Vector2(w * 0.5f, Slot(128) + 52f);
             bool urgent = left < 10f;
             float a = urgent ? 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(Time.time * 6f)) : 1f;
             MenuStyle.Box(new Rect(c.x - 52, c.y - 52, 104, 104), MenuStyle.W50 * a, 1f, 52f);
@@ -386,7 +398,7 @@ namespace BorrowGravity
         {
             float a = Fade(warning);
             if (a <= 0f) return;
-            var r = new Rect(w * 0.5f - 300 + (1 - a) * 40f, 214, 600, 84);
+            var r = new Rect(w * 0.5f - 300 + (1 - a) * 40f, Slot(84), 600, 84);
             float pulse = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(Time.time * 5f));
             MenuStyle.Box(r, pulse * a, 1f);
             MenuStyle.Brackets(r, 12f, 2f, a);
@@ -406,7 +418,7 @@ namespace BorrowGravity
         {
             float a = Fade(checkpoint);
             if (a <= 0f) return;
-            var r = new Rect(w * 0.5f - 220, 344 - (1 - a) * 20f, 440, 66);
+            var r = new Rect(w * 0.5f - 220, Slot(66) - (1 - a) * 20f, 440, 66);
             MenuStyle.Box(r, MenuStyle.W50 * a, 1f);
             MenuStyle.Brackets(r, 12f, 2f, a);
             MenuStyle.Text(new Rect(r.x, r.y + 12, r.width, 12), "CHECKPOINT", UIKit.Face.Heavy, 10, MenuStyle.W50 * a, 0.3f, TextAnchor.UpperCenter);
@@ -419,7 +431,7 @@ namespace BorrowGravity
             if (e == null) return;
             bool remote = NetSession.IsClient;
             float stab = remote ? NetHud.engineStability01 : e.Stability01;
-            var r = new Rect(w * 0.5f - 170, 104, 340, 34);
+            var r = new Rect(w * 0.5f - 170, Slot(34), 340, 34);
             MenuStyle.Box(r, MenuStyle.W25, 1f);
             UIKit.Fill(new Rect(r.x + 4, r.y + 4, (r.width - 8) * stab, r.height - 8), MenuStyle.White(0.35f));
             MenuStyle.Text(r, "ENGINE STABILITY  " + Mathf.RoundToInt(stab * 100) + "%", UIKit.Face.Heavy, 11, 1f, 0.25f);
@@ -468,7 +480,7 @@ namespace BorrowGravity
             if (b > 0f)
             {
                 // under the title banner: in third person the bottom-middle of the screen is the player's back
-                var r = new Rect(w * 0.5f - 400, 130f, 800, 74);
+                var r = new Rect(w * 0.5f - 400, Slot(74), 800, 74);
                 var old = GUI.color;
                 GUI.color = new Color(1, 1, 1, b);
                 MenuStyle.Box(r, MenuStyle.W50, 1f);
@@ -483,7 +495,7 @@ namespace BorrowGravity
         void DrawPauseButton(float w, StageManager sm)
         {
             if (sm == null || sm.State != StageState.Playing) return;
-            var r = new Rect(w * 0.5f + 244, 30, 42, 42);
+            var r = new Rect(w * 0.5f - 21, 18, 42, 42); // top centre (the objective box that sat beside it is gone)
             bool hover = r.Contains(Event.current.mousePosition);
             MenuStyle.Box(r, hover ? 1f : MenuStyle.W50, 1f);
             UIKit.Fill(new Rect(r.center.x - 7, r.y + 13, 4, 16), MenuStyle.White(1f));
@@ -514,6 +526,14 @@ namespace BorrowGravity
 
         static Camera CamFor(PlayerController p) => p != null && p.ViewCamera != null ? p.ViewCamera : Camera.main;
 
+        /// <summary>A marker that would sit on the instruction board is moved just below it.</summary>
+        static Rect ClearOfBoard(Rect r, Camera cam)
+        {
+            if (!InfoBoard.ShownRect(cam, out var board) || !board.Overlaps(r)) return r;
+            r.y = board.yMax + 6f;
+            return r;
+        }
+
         void DrawWorldMarkers()
         {
             float s = UIKit.Scale, w = UIKit.Width, h = UIKit.Height;
@@ -529,7 +549,7 @@ namespace BorrowGravity
                 bool onScreen = sp.z > 0 && gp.x > 0 && gp.x < w && gp.y > 0 && gp.y < h;
                 if (onScreen)
                 {
-                    var tag = new Rect(gp.x - 13, gp.y - 34, 26, 22);
+                    var tag = ClearOfBoard(new Rect(gp.x - 13, gp.y - 34, 26, 22), cam);
                     MenuStyle.Box(tag, MenuStyle.W80, 1f, 11f);
                     MenuStyle.Text(tag, p.displayName, UIKit.Face.Display, 12, 1f);
                     if (toasts.TryGetValue(p, out var t) && Time.time < t.until)
@@ -576,7 +596,7 @@ namespace BorrowGravity
                         var c = new Vector2(sp.x / s, (Screen.height - sp.y) / s);
                         string label = ModeLabel(gpw.Target.Mode);
                         float tw = MenuStyle.Measure(label, UIKit.Face.Heavy, 11, 0.2f) + 24f;
-                        var r = new Rect(c.x - tw * 0.5f, c.y - 13, tw, 26);
+                        var r = ClearOfBoard(new Rect(c.x - tw * 0.5f, c.y - 13, tw, 26), cam);
                         MenuStyle.Box(r, MenuStyle.W80, 1f, 13f);
                         MenuStyle.Text(r, label, UIKit.Face.Heavy, 11, 1f, 0.2f);
                     }

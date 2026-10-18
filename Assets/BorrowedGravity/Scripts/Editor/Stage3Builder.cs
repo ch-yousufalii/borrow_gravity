@@ -49,7 +49,7 @@ namespace BorrowGravity.EditorTools
                 var cp = piece.AddComponent<CrumblePlatform>();
                 cp.section = 1;
                 cp.triggerOnStep = false;
-                cp.regenerateAfter = -1f;
+                cp.regenerateAfter = 6f; // comes back, so a fall (or a respawn) never leaves the gap open for good
                 cp.crackTime = 2.2f;
                 collapse.Add(cp);
             }
@@ -60,7 +60,7 @@ namespace BorrowGravity.EditorTools
             tpd.triggeredByCarrier = false;
             tpd.triggeredByPlayers = true;
             tpd.requiredPlayers = 2; // only once both are on the bridge, so nobody is left behind
-            tpd.rearm = false;
+            tpd.rearm = true; // and it can collapse again on the next try
             tpd.startDelay = 1f;
             tpd.interval = 3.6f;
             tpd.warnTime = 2.0f;

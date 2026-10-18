@@ -244,6 +244,10 @@ namespace BorrowGravity.EditorTools
                 "No floor ahead — but the wall can be one! A: switch the corridor's gravity TOWARD THE WALL. B: steer the floating panel into the hole in the wall and hold it there while you cross.",
                 new Vector3(67f, 6.5f, 0f), new Vector3(1.5f, 4f, 7f), 11f);
 
+            // stepping stones across the hole, so it can also be crossed with (double) jumps
+            Spawn("Platform_Metal_2x2", new Vector3(74f, Upper, 0f), Vector3.zero, ctx.Group("6.5 Wall Walk"), null, "SteppingStoneA");
+            Spawn("Platform_Metal_2x2", new Vector3(78.5f, Upper, 0f), Vector3.zero, ctx.Group("6.5 Wall Walk"), null, "SteppingStoneB");
+
             SweeperArm(ctx, "6.5 Wall Walk", new Vector3(84.6f, Upper + 0.75f, 0f), 6f, 75f);
 
             // ---------- 6.6 Power Relay Puzzle ----------
