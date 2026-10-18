@@ -34,6 +34,9 @@ namespace BorrowGravity
         bool mouseWasDown;
         readonly Dictionary<int, (Vector2 last, int player)> lookPointers = new Dictionary<int, (Vector2, int)>();
         readonly HashSet<int> alive = new HashSet<int>();
+        readonly List<int> gone = new List<int>();
+
+        void Awake() => useGUILayout = false; // no GUILayout here: skip IMGUI's extra layout pass every frame
 
         /// <summary>Online each phone shows only its own player's controls, across the whole screen; solo just A;
         /// otherwise A and B share the screen.</summary>
@@ -181,7 +184,7 @@ namespace BorrowGravity
             }
             if (lookPointers.Count > 0)
             {
-                var gone = new List<int>();
+                gone.Clear();
                 foreach (var id in lookPointers.Keys) if (!alive.Contains(id)) gone.Add(id);
                 foreach (var id in gone) lookPointers.Remove(id);
             }

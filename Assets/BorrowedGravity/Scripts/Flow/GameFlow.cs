@@ -51,6 +51,7 @@ namespace BorrowGravity
             if (!Application.isMobilePlatform) return;
             Application.targetFrameRate = 60;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            PerformanceGuard.Begin();
         }
 
         public static int Unlocked

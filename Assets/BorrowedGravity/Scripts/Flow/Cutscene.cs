@@ -85,6 +85,8 @@ namespace BorrowGravity
         int nextCue, nextLine;
         bool done;
 
+        void Awake() => useGUILayout = false; // no GUILayout here: skip IMGUI's extra layout pass every frame
+
         void Start()
         {
             if (cam == null) cam = Camera.main;

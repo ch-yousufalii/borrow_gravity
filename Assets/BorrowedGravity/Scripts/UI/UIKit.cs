@@ -69,13 +69,29 @@ namespace BorrowGravity
         }
 
         /// <summary>Text with a soft drop shadow so it reads over any sky.</summary>
+        /// <summary>
+        /// GUI.Label in reference units, but the glyphs are rendered at the screen's real pixel size: the GUI matrix
+        /// scales the layout, and scaling text that way stretches a small font bitmap (blurry on HD phones).
+        /// </summary>
+        public static void Label(Rect r, string text, GUIStyle style)
+        {
+            if (Mathf.Abs(Scale - 1f) < 0.02f || style.font == null) { GUI.Label(r, text, style); return; }
+            var m = GUI.matrix;
+            int size = style.fontSize;
+            style.fontSize = Mathf.Max(1, Mathf.RoundToInt(size * Scale));
+            GUI.matrix = m * Matrix4x4.Scale(new Vector3(1f / Scale, 1f / Scale, 1f)); // keeps rotations (arrow glyphs)
+            GUI.Label(new Rect(r.x * Scale, r.y * Scale, r.width * Scale, r.height * Scale), text, style);
+            GUI.matrix = m;
+            style.fontSize = size;
+        }
+
         public static void Text(Rect r, string text, GUIStyle style)
         {
             var c = style.normal.textColor;
             style.normal.textColor = new Color(0, 0, 0, 0.65f * c.a);
-            GUI.Label(new Rect(r.x + 1.5f, r.y + 2f, r.width, r.height), Strip(text), style);
+            Label(new Rect(r.x + 1.5f, r.y + 2f, r.width, r.height), Strip(text), style);
             style.normal.textColor = c;
-            GUI.Label(r, text, style);
+            Label(r, text, style);
         }
 
         static string Strip(string s) => System.Text.RegularExpressions.Regex.Replace(s ?? "", "<.*?>", "");

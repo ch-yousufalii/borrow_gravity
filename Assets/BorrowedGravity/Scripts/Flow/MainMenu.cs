@@ -64,6 +64,8 @@ namespace BorrowGravity
         readonly float[] changedAt = new float[Rows.Length];
         Vector2 lastMouse;
 
+        void Awake() => useGUILayout = false; // no GUILayout here: skip IMGUI's extra layout pass every frame
+
         void Start()
         {
             Time.timeScale = 1f;

@@ -664,6 +664,8 @@ namespace BorrowGravity.EditorTools
             if (index == 0) { ctx.gravityPower = gp; ctx.playerA = pc; }
             if (index == 1) { ctx.nullifyPower = np; ctx.playerB = pc; }
             ctx.players.Add(pc);
+            // C and D only appear in 3-4 player games (GameStages switches them on), so the scene shows A and B
+            if (index >= 2) root.SetActive(false);
             return pc;
         }
 

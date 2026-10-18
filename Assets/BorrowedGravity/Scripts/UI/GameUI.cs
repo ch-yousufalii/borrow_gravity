@@ -32,7 +32,11 @@ namespace BorrowGravity
         float sectionUntil;
         bool showHelp = false;
 
-        void Awake() => instance = this;
+        void Awake()
+        {
+            instance = this;
+            useGUILayout = false; // no GUILayout here: skip IMGUI's extra layout pass every frame
+        }
 
         // ---------- static API ----------
 
