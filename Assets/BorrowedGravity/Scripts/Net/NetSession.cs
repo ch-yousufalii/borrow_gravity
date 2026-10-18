@@ -84,7 +84,11 @@ namespace BorrowGravity
             LastError = "";
             try
             {
-                string code = await RelayLink.HostAsync(GameFlow.PlayerCount - 1);
+                // without internet (a phone hotspot, an offline router) Unity Services can hang: don't wait forever
+                var relay = RelayLink.HostAsync(GameFlow.PlayerCount - 1);
+                if (await System.Threading.Tasks.Task.WhenAny(relay, System.Threading.Tasks.Task.Delay(6000)) != relay)
+                    throw new TimeoutException("no answer from Unity Relay");
+                string code = await relay;
                 Mode = NetMode.Host;
                 Status = NetStatus.Waiting;
                 RoomCode = code.ToUpperInvariant();
@@ -107,7 +111,10 @@ namespace BorrowGravity
             Busy = true;
             try
             {
-                await RelayLink.JoinAsync(code);
+                var join = RelayLink.JoinAsync(code);
+                if (await System.Threading.Tasks.Task.WhenAny(join, System.Threading.Tasks.Task.Delay(10000)) != join)
+                    throw new TimeoutException("no answer from Unity Relay");
+                await join;
                 BeginRelay();
                 hostEp = RelaySlot(0);
             }
@@ -834,8 +841,93 @@ namespace BorrowGravity
 
         // ---------- addresses ----------
 
+        /// <summary>
+        /// This device's addresses on local networks (Wi-Fi, its own hotspot, Ethernet) with their prefix length —
+        /// never the mobile-data one. A phone with mobile data on (or on Wi-Fi without internet) routes "everything"
+        /// over mobile data, so rooms must be searched for on these interfaces explicitly.
+        /// </summary>
+        static List<(IPAddress ip, int prefix, string name)> lanCache;
+        static float lanCacheTime = -10f;
+
+        static List<(IPAddress ip, int prefix, string name)> LanAddresses()
+        {
+            // the search asks several times a second; the interfaces rarely change
+            if (lanCache != null && Time.realtimeSinceStartup - lanCacheTime < 3f) return lanCache;
+            lanCacheTime = Time.realtimeSinceStartup;
+            var list = new List<(IPAddress, int, string)>();
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // Mono's interface list is unreliable on Android; ask Java
+            try
+            {
+                using var nic = new AndroidJavaClass("java.net.NetworkInterface");
+                using var all = nic.CallStatic<AndroidJavaObject>("getNetworkInterfaces");
+                while (all != null && all.Call<bool>("hasMoreElements"))
+                {
+                    using var ni = all.Call<AndroidJavaObject>("nextElement");
+                    string name = ni.Call<string>("getName") ?? "";
+                    if (!ni.Call<bool>("isUp") || ni.Call<bool>("isLoopback") || IsMobileData(name)) continue;
+                    using var addrs = ni.Call<AndroidJavaObject>("getInterfaceAddresses");
+                    int n = addrs.Call<int>("size");
+                    for (int i = 0; i < n; i++)
+                    {
+                        using var ia = addrs.Call<AndroidJavaObject>("get", i);
+                        using var inet = ia.Call<AndroidJavaObject>("getAddress");
+                        string host = inet.Call<string>("getHostAddress");
+                        if (host != null && host.Contains(".") && IPAddress.TryParse(host, out var ip))
+                            list.Add((ip, ia.Call<short>("getNetworkPrefixLength"), name));
+                    }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[Net] interface list failed: " + e.Message); }
+#endif
+            if (list.Count == 0)
+            {
+                try
+                {
+                    foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+                    {
+                        if (ni.OperationalStatus != OperationalStatus.Up || IsMobileData(ni.Name)) continue;
+                        foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                        {
+                            if (ua.Address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(ua.Address)) continue;
+                            int prefix = 24;
+                            if (ua.IPv4Mask != null)
+                            {
+                                prefix = 0;
+                                foreach (byte m in ua.IPv4Mask.GetAddressBytes()) for (int bit = 7; bit >= 0; bit--) if ((m >> bit & 1) != 0) prefix++;
+                            }
+                            list.Add((ua.Address, prefix, ni.Name));
+                        }
+                    }
+                }
+                catch { }
+            }
+            // Wi-Fi and hotspot first
+            list.Sort((x, y) => Rank(x.Item3).CompareTo(Rank(y.Item3)));
+            lanCache = list;
+            return list;
+        }
+
+        static bool IsMobileData(string name)
+        {
+            name = (name ?? "").ToLowerInvariant();
+            foreach (var p in new[] { "rmnet", "ccmni", "pdp", "wwan", "clat", "dummy", "tun", "ppp", "ifb", "docker", "veth", "virbr" })
+                if (name.StartsWith(p)) return true;
+            return false;
+        }
+
+        static int Rank(string name)
+        {
+            name = (name ?? "").ToLowerInvariant();
+            if (name.StartsWith("wlan") || name.StartsWith("swlan") || name.StartsWith("ap") || name.StartsWith("wl")) return 0;
+            if (name.StartsWith("eth") || name.StartsWith("en")) return 1;
+            return 2;
+        }
+
         static string FindLocalAddress()
         {
+            var lan = LanAddresses();
+            if (lan.Count > 0) return lan[0].ip.ToString();
             try
             {
                 using var s = new System.Net.Sockets.Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
@@ -843,61 +935,36 @@ namespace BorrowGravity
                 if (s.LocalEndPoint is IPEndPoint ep && !IPAddress.IsLoopback(ep.Address)) return ep.Address.ToString();
             }
             catch { }
-            try
-            {
-                foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus != OperationalStatus.Up) continue;
-                    foreach (var ua in ni.GetIPProperties().UnicastAddresses)
-                        if (ua.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ua.Address))
-                            return ua.Address.ToString();
-                }
-            }
-            catch { }
             return "";
         }
 
+        /// <summary>Where a room search goes: everyone, this machine, and each local network's own broadcast address.</summary>
         static List<IPEndPoint> BroadcastTargets()
         {
             var list = new List<IPEndPoint> { new IPEndPoint(IPAddress.Broadcast, Port), new IPEndPoint(IPAddress.Loopback, Port) };
-            try
+            foreach (var (ip, prefix, _) in LanAddresses())
             {
-                foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus != OperationalStatus.Up) continue;
-                    foreach (var ua in ni.GetIPProperties().UnicastAddresses)
-                    {
-                        if (ua.Address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(ua.Address)) continue;
-                        byte[] ip = ua.Address.GetAddressBytes();
-                        byte[] mask = ua.IPv4Mask != null ? ua.IPv4Mask.GetAddressBytes() : new byte[] { 255, 255, 255, 0 };
-                        var b = new byte[4];
-                        for (int i = 0; i < 4; i++) b[i] = (byte)(ip[i] | ~mask[i]);
-                        list.Add(new IPEndPoint(new IPAddress(b), Port));
-                    }
-                }
-            }
-            catch
-            {
-                // some phones refuse interface queries: fall back to a /24 guess from our own address
-                if (IPAddress.TryParse(LocalAddress, out var own))
-                {
-                    var b = own.GetAddressBytes();
-                    b[3] = 255;
-                    list.Add(new IPEndPoint(new IPAddress(b), Port));
-                }
+                byte[] b = ip.GetAddressBytes();
+                int p = Mathf.Clamp(prefix, 8, 30);
+                uint mask = 0xFFFFFFFFu << (32 - p);
+                uint addr = (uint)(b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3]);
+                uint bc = addr | ~mask;
+                list.Add(new IPEndPoint(new IPAddress(new[] { (byte)(bc >> 24), (byte)(bc >> 16), (byte)(bc >> 8), (byte)bc }), Port));
             }
             return list;
         }
 
-        /// <summary>Every other address on our /24 network, for phones and hotspots that drop broadcasts.</summary>
+        /// <summary>Every other address on each local /24, for phones and hotspots that drop broadcasts.</summary>
         static IEnumerable<IPEndPoint> SubnetTargets()
         {
-            if (!IPAddress.TryParse(LocalAddress, out var own)) yield break;
-            var b = own.GetAddressBytes();
-            for (int i = 1; i < 255; i++)
+            foreach (var (own, _, _) in LanAddresses())
             {
-                if (i == b[3]) continue;
-                yield return new IPEndPoint(new IPAddress(new[] { b[0], b[1], b[2], (byte)i }), Port);
+                var b = own.GetAddressBytes();
+                for (int i = 1; i < 255; i++)
+                {
+                    if (i == b[3]) continue;
+                    yield return new IPEndPoint(new IPAddress(new[] { b[0], b[1], b[2], (byte)i }), Port);
+                }
             }
         }
 

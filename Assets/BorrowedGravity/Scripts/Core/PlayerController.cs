@@ -71,6 +71,10 @@ namespace BorrowGravity
         public float jumpVelocity = 10f;
         public float jumpBufferTime = 0.15f;
         public float coyoteTime = 0.1f;
+        [Tooltip("Extra jumps in the air (1 = double jump).")]
+        public int airJumps = 1;
+        [Tooltip("Strength of an air jump compared to the first one.")]
+        public float airJumpScale = 0.9f;
         public float groundCheckDistance = 0.15f;
         public float turnSpeed = 12f;
         public LayerMask groundMask = ~0;
@@ -100,6 +104,7 @@ namespace BorrowGravity
         CapsuleCollider col;
         GravityAffected grav;
         Camera cam;
+        int airJumpsLeft;
         float jumpBuffer, lastGroundedTime = -1f, invulnerableUntil, stunnedUntil, lastPushTime = -1f;
         Vector3 spawnPosition;
         readonly RaycastHit[] hits = new RaycastHit[8];
@@ -150,7 +155,8 @@ namespace BorrowGravity
             if (NetSession.IsClient) return;
             if (ViewCamera != null) cam = ViewCamera;
             if (cam == null) cam = Camera.main;
-            if (!InputEnabled)
+            var stage = StageManager.Instance;
+            if (!InputEnabled || (stage != null && stage.isActiveAndEnabled && stage.MissionShowing))
             {
                 RawMove = Vector2.zero;
                 return;
@@ -202,7 +208,7 @@ namespace BorrowGravity
             float dt = Time.fixedDeltaTime;
             Vector3 up = Up;
             CheckGround(up);
-            if (IsGrounded) lastGroundedTime = Time.time;
+            if (IsGrounded) { lastGroundedTime = Time.time; airJumpsLeft = airJumps; }
             Vector3 carry = ComputeCarry();
 
             GetMoveAxes(up, out var right, out var fwd);
@@ -235,6 +241,14 @@ namespace BorrowGravity
                 lastGroundedTime = -1f;
                 IsGrounded = false;
                 Sfx.Play(SfxId.Jump, 0.35f);
+            }
+            else if (jumpBuffer > 0f && airJumpsLeft > 0 && !MovementLocked && !IsGrounded)
+            {
+                // double jump: a second push in the air (never weaker than the current rise)
+                vUp = Mathf.Max(vUp, jumpVelocity * airJumpScale);
+                jumpBuffer = 0f;
+                airJumpsLeft--;
+                Sfx.Play(SfxId.Jump, 0.3f, 1.25f);
             }
             rb.linearVelocity = vPlane + up * vUp;
 

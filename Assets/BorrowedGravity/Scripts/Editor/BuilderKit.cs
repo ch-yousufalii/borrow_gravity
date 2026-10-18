@@ -117,7 +117,7 @@ namespace BorrowGravity.EditorTools
         // ---------- scene ----------
 
         /// <summary>Walkways are this much wider than in the art kit layout, so there's room to move around.</summary>
-        public const float LaneWidth = 1.5f;
+        public const float LaneWidth = 1.8f;
 
         // things you walk on: stretched across the lane (z) by LaneWidth
         static readonly HashSet<string> Walkable = new HashSet<string>
@@ -548,7 +548,7 @@ namespace BorrowGravity.EditorTools
                 return q.transform;
             }
             // the menu's look in the world: dark glass, white text, a white hairline edge
-            board.panel = Quad("Panel", Transparent("BoardPanel", new Color(0.02f, 0.03f, 0.07f, 0.62f)));
+            board.panel = Quad("Panel", Transparent("BoardPanel", new Color(0.02f, 0.03f, 0.07f, 0.85f)));
             board.edge = Quad("Edge", Lit("BoardEdge", Color.white, Color.white * 1.2f));
             return board;
         }
@@ -664,6 +664,8 @@ namespace BorrowGravity.EditorTools
             if (index == 0) { ctx.gravityPower = gp; ctx.playerA = pc; }
             if (index == 1) { ctx.nullifyPower = np; ctx.playerB = pc; }
             ctx.players.Add(pc);
+            // C and D only appear in 3-4 player games (GameStages switches them on), so the scene shows A and B
+            if (index >= 2) root.SetActive(false);
             return pc;
         }
 

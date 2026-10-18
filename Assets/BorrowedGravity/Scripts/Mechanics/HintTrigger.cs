@@ -2,7 +2,10 @@ using UnityEngine;
 
 namespace BorrowGravity
 {
-    /// <summary>Shows a short instruction (and updates the objective line) the first time a player walks in.</summary>
+    /// <summary>
+    /// Names the section in the HUD the first time a player walks in. The instruction itself is on the section's
+    /// <see cref="InfoBoard"/> next to the puzzle (it used to be repeated in a HUD box, which doubled the text).
+    /// </summary>
     [RequireComponent(typeof(Collider))]
     public class HintTrigger : MonoBehaviour
     {
@@ -20,7 +23,6 @@ namespace BorrowGravity
             if ((once && fired) || Players.From(other) == null) return;
             fired = true;
             if (!string.IsNullOrEmpty(sectionTitle)) GameUI.SetSection(sectionTitle);
-            if (!string.IsNullOrEmpty(message)) GameUI.ShowHint(message, duration);
         }
     }
 }

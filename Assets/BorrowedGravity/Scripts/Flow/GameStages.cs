@@ -35,6 +35,11 @@ namespace BorrowGravity
 
         public bool Has(int index) => index >= 0 && index < roots.Length && roots[index] != null;
 
+        // levels already played in this scene keep their state (finished puzzles, a "complete" stage); showing
+        // one again needs a fresh scene
+        readonly System.Collections.Generic.HashSet<int> shown = new System.Collections.Generic.HashSet<int>();
+        public bool WasShown(int index) => shown.Contains(index);
+
         /// <summary>
         /// Before a level comes on: keep only as many astronauts as there are players, switch on their powers
         /// (A/C gravity, B/D nullify, solo both — nullify on the second button) and, without a room, pick the camera
@@ -76,6 +81,7 @@ namespace BorrowGravity
             ApplyPlayers(root);
             root.gameObject.SetActive(true);
             Current = index;
+            shown.Add(index);
             GameFlow.PendingStage = index;
 
             if (NetSession.IsHost) NetSession.SendStage(index, GameFlow.ShowIntro);

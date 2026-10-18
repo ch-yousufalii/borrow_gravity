@@ -5,8 +5,9 @@ namespace BorrowGravity
 {
     /// <summary>
     /// Title screen in the final menu design (borrowed-gravity-menu.html): white-only outlines over the orbiting scene.
-    /// Brand on the left; on the right a "NEW GAME" pill, selector rows (stage with difficulty pips, mode, opening
-    /// cutscene toggle), START, Controls / Quit and a key-hint footer. Overlays: Controls, Quit confirm, Launching.
+    /// Brand on the left; on the right a "NEW GAME" pill, selector rows (stage with difficulty pips, opening cutscene
+    /// toggle), START, Controls / Settings / Quit and a key-hint footer. START asks how to play (solo, host a room
+    /// for 2-4, join). Overlays: Play chooser, Controls, Settings, Quit confirm, Launching.
     /// Mode = play solo (both powers), host a room for 2-4 players, or join one (every player on their own device,
     /// full screen). Keyboard, mouse or touch.
     /// </summary>
@@ -20,9 +21,9 @@ namespace BorrowGravity
         [Tooltip("How soft the orbiting scene behind the menu is (0 = sharp, 1 = very blurred).")]
         [Range(0f, 1f)] public float backgroundBlur = 0.5f;
 
-        enum Row { Stage, Mode, Cutscene, Start, Controls, Settings, Quit }
-        static readonly Row[] Rows = { Row.Stage, Row.Mode, Row.Cutscene, Row.Start, Row.Controls, Row.Settings, Row.Quit };
-        enum Overlay { None, Controls, Quit, Launch, Settings }
+        enum Row { Stage, Cutscene, Start, Controls, Settings, Quit }
+        static readonly Row[] Rows = { Row.Stage, Row.Cutscene, Row.Start, Row.Controls, Row.Settings, Row.Quit };
+        enum Overlay { None, Play, Controls, Quit, Launch, Settings }
 
         static readonly (string name, string hint, int diff)[] Stages =
         {
@@ -33,11 +34,11 @@ namespace BorrowGravity
         // 0 solo, 1-3 host a room for 2-4 players, 4 join
         static readonly (string name, string hint)[] Modes =
         {
-            ("Solo", "Play alone · E bends gravity, Q freezes."),
-            ("Host · 2 Players", "Create a room for 2 · share the code."),
-            ("Host · 3 Players", "Create a room for 3 · share the code."),
-            ("Host · 4 Players", "Create a room for 4 · share the code."),
-            ("Join a Room", "Enter the host's room code."),
+            ("Solo", "Play alone with both powers."),
+            ("2 Players", "Create a room · share the code."),
+            ("3 Players", "Create a room · share the code."),
+            ("4 Players", "Create a room · share the code."),
+            ("Join a Room", "Type the code from the host's screen."),
         };
         const int JoinMode = 4;
         bool Solo => mode == 0;
@@ -62,6 +63,8 @@ namespace BorrowGravity
         float angle, introFade = 1f, toggleAnim = 1f, launchStart;
         readonly float[] changedAt = new float[Rows.Length];
         Vector2 lastMouse;
+
+        void Awake() => useGUILayout = false; // no GUILayout here: skip IMGUI's extra layout pass every frame
 
         void Start()
         {
@@ -165,6 +168,14 @@ namespace BorrowGravity
                 if (SettingsPanel.HandleKeys()) CloseOverlay();
                 return;
             }
+            if (overlay == Overlay.Play)
+            {
+                if (PlayerKeys.Pressed(Key.Escape)) CloseOverlay();
+                if (PlayerKeys.Pressed(Key.W) || PlayerKeys.Pressed(Key.UpArrow)) { mode = (mode + Modes.Length - 1) % Modes.Length; Sfx.Play(SfxId.Tick, 0.5f); }
+                if (PlayerKeys.Pressed(Key.S) || PlayerKeys.Pressed(Key.DownArrow)) { mode = (mode + 1) % Modes.Length; Sfx.Play(SfxId.Tick, 0.5f); }
+                if (Confirm()) Play(mode);
+                return;
+            }
             if (overlay != Overlay.None)
             {
                 if (PlayerKeys.Pressed(Key.Escape)) CloseOverlay();
@@ -191,7 +202,6 @@ namespace BorrowGravity
             switch (Rows[row])
             {
                 case Row.Stage: stage = (stage + d + GameFlow.Unlocked) % GameFlow.Unlocked; break;
-                case Row.Mode: mode = (mode + d + Modes.Length) % Modes.Length; break;
                 case Row.Cutscene: cutscene = !cutscene; break;
                 default: return;
             }
@@ -204,17 +214,24 @@ namespace BorrowGravity
             Sfx.Play(SfxId.Plate, 0.6f);
             switch (r)
             {
-                case Row.Start:
-                    NetSession.LastError = "";
-                    if (Solo) { GameFlow.PlayerCount = 1; StartGame(); }
-                    else if (Joining) joinEntry = true;
-                    else { GameFlow.PlayerCount = mode + 1; NetSession.HostRoom(); }
-                    break;
+                case Row.Start: overlay = Overlay.Play; break;
                 case Row.Controls: overlay = Overlay.Controls; break;
                 case Row.Settings: overlay = Overlay.Settings; break;
                 case Row.Quit: overlay = Overlay.Quit; break;
                 default: Change(1); break;
             }
+        }
+
+        /// <summary>A choice from the START screen: solo, a room for 2-4, or join one.</summary>
+        void Play(int choice)
+        {
+            mode = choice;
+            overlay = Overlay.None;
+            NetSession.LastError = "";
+            Sfx.Play(SfxId.Plate, 0.6f);
+            if (Solo) { GameFlow.PlayerCount = 1; StartGame(); }
+            else if (Joining) joinEntry = true;
+            else { GameFlow.PlayerCount = mode + 1; NetSession.HostRoom(); }
         }
 
         void CloseOverlay()
@@ -240,7 +257,7 @@ namespace BorrowGravity
             if (softTex != null && Event.current.type == EventType.Repaint)
             {
                 GUI.DrawTexture(new Rect(0, 0, w, h), softTex, ScaleMode.StretchToFill);
-                UIKit.Fill(new Rect(0, 0, w, h), new Color(0.02f, 0.03f, 0.07f, 0.15f));
+                UIKit.Fill(new Rect(0, 0, w, h), new Color(0.02f, 0.03f, 0.07f, 0.45f)); // darker, so the white menu stands out
             }
             // fully transparent: white lines and text straight over the orbiting scene (text has a soft shadow)
 
@@ -256,6 +273,7 @@ namespace BorrowGravity
                 MenuStyle.Text(new Rect(0, h - 44, w, 24), NetSession.LastError, UIKit.Face.Heavy, 14, MenuStyle.W80);
 
             if (RoomPanelOpen) DrawRoom(w, h);
+            else if (overlay == Overlay.Play) DrawPlay(w, h);
             else if (overlay == Overlay.Controls) DrawControls(w, h);
             else if (overlay == Overlay.Quit) DrawQuit(w, h);
             else if (overlay == Overlay.Launch) DrawLaunch(w, h);
@@ -281,19 +299,20 @@ namespace BorrowGravity
             if (e.type == EventType.Repaint) lastMouse = mouse;
 
             // heights from the design: rows 12 padding, start 18, secondary 14
-            float[] heights = { 96f, 80f, 88f, 63f, 45f };
-            float total = 11f + 12f + 18f + heights[0] + heights[1] + heights[2] + 8f * 3f + 14f + heights[3] + 8f + heights[4] + 18f + 14f + 22f;
+            float[] heights = { 96f, 88f, 63f, 45f };
+            float total = 11f + 12f + 18f + heights[0] + heights[1] + 8f * 2f + 14f + heights[2] + 8f + heights[3] + 18f + 14f + 22f;
             float y = Mathf.Max(24f, (h - total) * 0.5f);
 
             // head: NEW GAME pill + hairline
             float pillW = MenuStyle.Measure("NEW GAME", UIKit.Face.Display, 11, 0.3f) + 28f;
-            var pill = new Rect(x, y, pillW, 25f);
+            var pill = new Rect(x + (width - pillW) * 0.5f, y, pillW, 25f);
             MenuStyle.Box(pill, 1f, 1f, 12.5f);
             MenuStyle.Text(pill, "NEW GAME", UIKit.Face.Display, 11, 1f, 0.3f);
-            MenuStyle.Line(pill.xMax + 12f, pill.center.y, width - pillW - 12f, MenuStyle.W25);
+            MenuStyle.Line(x, pill.center.y, pill.x - 12f - x, MenuStyle.W25);
+            MenuStyle.Line(pill.xMax + 12f, pill.center.y, x + width - pill.xMax - 12f, MenuStyle.W25);
             y += 25f + 18f;
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 2; i++)
             {
                 var r = new Rect(x, y, width, heights[i]);
                 DrawSelectRow(i, r, live, mouseMoved);
@@ -302,23 +321,23 @@ namespace BorrowGravity
 
             // START
             y += 14f - 8f + 8f;
-            var start = new Rect(x, y, width, heights[3]);
+            var start = new Rect(x, y, width, heights[2]);
             RowFrame(start, (int)Row.Start, true, live, mouseMoved);
             MenuStyle.Text(start, "START", UIKit.Face.Heavy, 22, 1f, 0.4f);
-            y += heights[3] + 8f;
+            y += heights[2] + 8f;
 
             // secondary: Controls | Settings | Quit
             float third = (width - 16f) / 3f;
-            var ctl = new Rect(x, y, third, heights[4]);
-            var set = new Rect(x + third + 8f, y, third, heights[4]);
-            var quit = new Rect(x + (third + 8f) * 2f, y, third, heights[4]);
+            var ctl = new Rect(x, y, third, heights[3]);
+            var set = new Rect(x + third + 8f, y, third, heights[3]);
+            var quit = new Rect(x + (third + 8f) * 2f, y, third, heights[3]);
             RowFrame(ctl, (int)Row.Controls, false, live, mouseMoved);
             RowFrame(set, (int)Row.Settings, false, live, mouseMoved);
             RowFrame(quit, (int)Row.Quit, false, live, mouseMoved);
             MenuStyle.Text(ctl, "CONTROLS", UIKit.Face.Heavy, 13, 1f, 0.22f);
             MenuStyle.Text(set, "SETTINGS", UIKit.Face.Heavy, 13, 1f, 0.22f);
             MenuStyle.Text(quit, "QUIT", UIKit.Face.Heavy, 13, 1f, 0.22f);
-            y += heights[4] + 18f;
+            y += heights[3] + 18f;
 
             // key hints
             MenuStyle.Line(x, y, width, MenuStyle.W25);
@@ -362,13 +381,13 @@ namespace BorrowGravity
             RowFrame(r, index, false, live, mouseMoved);
 
             var mid = new Rect(left.xMax + 10f, r.y + 12f, right.x - left.xMax - 20f, r.height - 24f);
-            string label = index == 0 ? "STAGE" : index == 1 ? "MODE" : "OPENING CUTSCENE";
+            string label = index == 0 ? "STAGE" : "OPENING CUTSCENE";
             MenuStyle.Text(new Rect(mid.x, mid.y, mid.width, 12f), label, UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperCenter);
 
             // the value slides in when it changes
             float k = Mathf.Clamp01((Time.unscaledTime - changedAt[index]) / 0.2f);
             k = 1f - (1f - k) * (1f - k);
-            string value = index == 0 ? Stages[stage].name : index == 1 ? Modes[mode].name : cutscene ? "On" : "Off";
+            string value = index == 0 ? Stages[stage].name : cutscene ? "On" : "Off";
             MenuStyle.Text(new Rect(mid.x, mid.y + 16f, mid.width, 24f), value.ToUpperInvariant(), UIKit.Face.Heavy, 18, k, 0.08f, TextAnchor.UpperCenter, 5f * (1f - k));
 
             float ey = mid.y + 16f + 24f + 5f;
@@ -383,8 +402,6 @@ namespace BorrowGravity
                     else MenuStyle.Box(pip, MenuStyle.W50, 1f);
                 }
             }
-            else if (index == 1)
-                MenuStyle.Text(new Rect(mid.x, ey, mid.width, 16f), Modes[mode].hint, UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
             else
             {
                 var tog = new Rect(mid.center.x - 22f, ey + 1f, 44f, 22f);
@@ -428,6 +445,42 @@ namespace BorrowGravity
             var r = new Rect((w - width) * 0.5f, (h - height) * 0.5f, width, height);
             MenuStyle.Box(r, 1f, 1f);
             return r;
+        }
+
+        /// <summary>START: how do you want to play? One row per choice; the seats show how many players.</summary>
+        void DrawPlay(float w, float h)
+        {
+            var e = Event.current;
+            const float rowH = 58f, gap = 8f;
+            var r = Modal(w, h, Mathf.Min(w * 0.92f, 560f), 26f + 22f + 24f + Modes.Length * (rowH + gap) + 78f);
+            float x = r.x + 26f, inner = r.width - 52f, y = r.y + 26f;
+            MenuStyle.Text(new Rect(x, y, inner, 22f), "HOW DO YOU WANT TO PLAY?", UIKit.Face.Display, 18, 1f, 0.2f, TextAnchor.UpperLeft);
+            y += 22f + 24f;
+            for (int i = 0; i < Modes.Length; i++)
+            {
+                var row = new Rect(x, y, inner, rowH);
+                bool hover = row.Contains(e.mousePosition), active = mode == i;
+                if (hover && e.type == EventType.MouseMove && mode != i) { mode = i; Sfx.Play(SfxId.Tick, 0.25f); }
+                MenuStyle.Box(row, active ? MenuStyle.W50 : hover ? MenuStyle.W25 : MenuStyle.W12, 1f);
+                if (active) MenuStyle.Brackets(row);
+                MenuStyle.Text(new Rect(row.x + 18f, row.y + 10f, inner * 0.6f, 22f), Modes[i].name.ToUpperInvariant(), UIKit.Face.Heavy, 16, 1f, 0.12f, TextAnchor.UpperLeft);
+                MenuStyle.Text(new Rect(row.x + 18f, row.y + 33f, inner * 0.65f, 16f), Modes[i].hint, UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperLeft);
+                // seats: one small box per player (A, B, C, D), or "+" for joining someone else's room
+                int seats = i == JoinMode ? 0 : i + 1;
+                float sx = row.xMax - 18f;
+                if (seats == 0) MenuStyle.Text(new Rect(sx - 60f, row.y, 60f, rowH), "CODE ›", UIKit.Face.Heavy, 11, MenuStyle.W80, 0.2f, TextAnchor.MiddleRight);
+                for (int p = seats - 1; p >= 0; p--)
+                {
+                    var seat = new Rect(sx - 26f, row.center.y - 13f, 26f, 26f);
+                    MenuStyle.Box(seat, active ? 1f : MenuStyle.W50, 1f);
+                    MenuStyle.Text(seat, GameFlow.Letter(p), UIKit.Face.Display, 12, active ? 1f : MenuStyle.W80, 0f);
+                    sx -= 32f;
+                }
+                if (hover && e.type == EventType.MouseDown) { e.Use(); Play(i); }
+                y += rowH + gap;
+            }
+            if (MenuStyle.Button(new Rect(r.xMax - 26f - 96f, r.yMax - 26f - 34f, 96f, 34f), "Back")) CloseOverlay();
+            MenuStyle.Text(new Rect(x, r.yMax - 26f - 34f, inner - 110f, 34f), "W / S choose  ·  Enter play  ·  Esc back", UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
         }
 
         void DrawControls(float w, float h)

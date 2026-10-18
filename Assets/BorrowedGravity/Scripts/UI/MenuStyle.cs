@@ -86,8 +86,8 @@ namespace BorrowGravity
             var shadow = UIKit.Style(face, size, new Color(0f, 0f, 0f, ShadowAlpha * alpha), TextAnchor.UpperLeft);
             if (spacingEm <= 0f)
             {
-                GUI.Label(new Rect(x + 1f, y + 1.5f, total + 4f, lineH), text, shadow);
-                GUI.Label(new Rect(x, y, total + 4f, lineH), text, st);
+                UIKit.Label(new Rect(x + 1f, y + 1.5f, total + 4f, lineH), text, shadow);
+                UIKit.Label(new Rect(x, y, total + 4f, lineH), text, st);
                 return;
             }
             float gap = spacingEm * size;
@@ -96,8 +96,8 @@ namespace BorrowGravity
                 long key = ((long)face << 40) | ((long)size << 24) | ch;
                 charWidths.TryGetValue(key, out float cw);
                 string s = ch.ToString();
-                GUI.Label(new Rect(x + 1f, y + 1.5f, cw + 4f, lineH), s, shadow);
-                GUI.Label(new Rect(x, y, cw + 4f, lineH), s, st);
+                UIKit.Label(new Rect(x + 1f, y + 1.5f, cw + 4f, lineH), s, shadow);
+                UIKit.Label(new Rect(x, y, cw + 4f, lineH), s, st);
                 x += cw + gap;
             }
         }
@@ -106,7 +106,7 @@ namespace BorrowGravity
         public static void Paragraph(Rect r, string text, UIKit.Face face, int size, float alpha, TextAnchor align = TextAnchor.UpperCenter)
         {
             var st = UIKit.Style(face, size, White(alpha), align, true);
-            GUI.Label(r, text, st);
+            UIKit.Label(r, text, st);
         }
 
         static void Shape(Rect r, Color c, float radius = 0f)

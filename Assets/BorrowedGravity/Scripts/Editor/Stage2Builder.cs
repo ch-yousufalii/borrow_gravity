@@ -138,7 +138,8 @@ namespace BorrowGravity.EditorTools
                 new Vector3(20.8f, 3.5f, 0f), new Vector3(1.4f, 4f, 7f), 11f);
 
             // ---------- 6.3 Magnetic Cargo Lane ----------
-            Checkpoint(ctx, ctx.Piece("6.3", "Checkpoint_Beacon"), new Vector3(35.2f, Upper, -2.6f), 2, "Cargo Lane", new Vector3(3f, 4f, 7f), spawnX: 35.2f);
+            var cargoCp = Checkpoint(ctx, ctx.Piece("6.3", "Checkpoint_Beacon"), new Vector3(35.2f, Upper, -2.6f), 2, "Cargo Lane", new Vector3(3f, 4f, 7f), spawnX: 35.2f);
+            cargoCp.transform.position = new Vector3(32.2f, Upper, -2.6f); // trigger a little earlier (Feeza's correction)
             foreach (var c in ctx.Pieces("6.3", "Crate_Heavy_2m")) Remove(c);
             foreach (var c in ctx.Pieces("6.3", "Cargo_Container")) Remove(c);
             foreach (var c in ctx.Pieces("6.3", "Crate_1m")) Remove(c);
@@ -146,7 +147,8 @@ namespace BorrowGravity.EditorTools
             RemoveWallsAt(ctx, "6.3", 54f, 5f);
             RemoveWallsAt(ctx, "6.4", 58f, 5f);
             Spawn("Station_Floor_4x4", new Vector3(55f, 4.7f, 6.5f), Vector3.zero, ctx.Group("6.3 Lane"), new Vector3(2f, 1f, 1f), "BayFloor");
-            var jam = Spawn("Cargo_Container", new Vector3(55f, Upper, 1.3f), Vector3.zero, ctx.Group("6.3 Lane"), null, "JammedContainer");
+            // pushed toward the back bay, so there is room to walk past it on the camera side
+            var jam = Spawn("Cargo_Container", new Vector3(55f, Upper, 4.2f), Vector3.zero, ctx.Group("6.3 Lane"), null, "JammedContainer");
             MakeDynamic(jam, 60f);
             Gravity(jam, ZeroGravityResponse.Hover);
             Nullify(jam, "Jammed Container", 9f, true, 2.4f);
@@ -178,7 +180,7 @@ namespace BorrowGravity.EditorTools
             conv.speed = 2.6f;
             conv.spawnInterval = 4.2f;
             Hint(ctx, "6.3  Magnetic Cargo Lane",
-                "Cargo slides down the magnetic lane — step into the side bays (toward the camera) to let it pass.\nA jammed container blocks the exit: A zeroes its gravity, B steers it into the back bay.",
+                "Cargo slides down the lane — wait in a side bay (toward the camera) until it passes, then run.\nAt the exit, walk past the jammed container on the near side. A: press E to make its field ZERO-G if you want it to float out of the way.",
                 new Vector3(36f, 6.5f, 0f), new Vector3(1.5f, 4f, 7f), 11f);
 
             // ---------- 6.4 Airlock Timer ----------
@@ -214,7 +216,7 @@ namespace BorrowGravity.EditorTools
             entry.speed = 6f;
             SlidingDoor(ctx, "6.4 Airlock", 66.2f, success, invert: false, latch: true).openMessage = "Airlock open!";
             Hint(ctx, "6.4  Airlock Timer",
-                "Hull breach ahead! When the countdown starts: B steers the floating power cell onto the floor socket, A restores gravity to seat it, then BOTH stand on the console pads.",
+                "Hull breach — the room is ZERO-G and a countdown starts!\n1) B: aim at the floating power cell, hold Right Shift and steer it over the glowing floor socket.\n2) A: press E to switch the room's gravity DOWN so the cell drops in.\n3) Stand on both console pads to open the door.",
                 new Vector3(57.6f, 6.5f, 0f), new Vector3(1f, 4f, 7f), 11f);
 
             // ---------- 6.5 Broken Wall Walk ----------
@@ -242,6 +244,10 @@ namespace BorrowGravity.EditorTools
             Hint(ctx, "6.5  Broken Wall Walk",
                 "No floor ahead — but the wall can be one! A: switch the corridor's gravity TOWARD THE WALL. B: steer the floating panel into the hole in the wall and hold it there while you cross.",
                 new Vector3(67f, 6.5f, 0f), new Vector3(1.5f, 4f, 7f), 11f);
+
+            // stepping stones across the hole, so it can also be crossed with (double) jumps
+            Spawn("Platform_Metal_2x2", new Vector3(74f, Upper, 0f), Vector3.zero, ctx.Group("6.5 Wall Walk"), null, "SteppingStoneA");
+            Spawn("Platform_Metal_2x2", new Vector3(78.5f, Upper, 0f), Vector3.zero, ctx.Group("6.5 Wall Walk"), null, "SteppingStoneB");
 
             SweeperArm(ctx, "6.5 Wall Walk", new Vector3(84.6f, Upper + 0.75f, 0f), 6f, 75f);
 

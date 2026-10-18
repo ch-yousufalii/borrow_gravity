@@ -67,9 +67,14 @@ namespace BorrowGravity
 
         public static void SnapAll() { foreach (var c in all) c.SnapNow(); }
 
+        CameraView shownView;
+
         void LateUpdate()
         {
-            if (thirdPerson && FollowPlayer()) return;
+            // the pause menu can switch between third person and the side view at any time
+            var view = thirdPerson ? ControlSettings.View : CameraView.Side;
+            if (view != shownView) { shownView = view; initialised = false; }
+            if (view == CameraView.ThirdPerson && FollowPlayer()) return;
             if (!TryGetBounds(out Bounds b)) return;
             Vector3 c = b.center + focusOffset;
             c.y = Mathf.Max(c.y, minFocusY);
