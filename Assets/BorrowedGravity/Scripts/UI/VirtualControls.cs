@@ -20,7 +20,8 @@ namespace BorrowGravity
         [Tooltip("Camera turn per screen pixel of mouse movement (degrees).")]
         public float mouseLookSpeed = 0.12f;
 
-        class Stick { public int pointer = int.MinValue; public Vector2 center, knob, input; }
+        // home = resting spot; center = where the thumb landed (floating joystick); zone = the left half of this player's screen
+        class Stick { public int pointer = int.MinValue; public Vector2 center, home, knob, input; public Rect zone; }
         class Button { public Vector2 center; public bool held; }
 
         readonly Stick[] sticks = { new Stick(), new Stick() };
@@ -46,7 +47,10 @@ namespace BorrowGravity
             for (int p = 0; p < 2; p++)
             {
                 float x0 = NetSession.Online ? 0f : p * half;
-                sticks[p].center = new Vector2(x0 + 50f + sr, y);
+                sticks[p].home = new Vector2(x0 + 50f + sr, y);
+                // PUBG style: the left half of this player's screen is the joystick, the right half turns the camera
+                sticks[p].zone = new Rect(x0, 110f, half * 0.5f, h - 110f);
+                if (sticks[p].pointer == int.MinValue) sticks[p].center = sticks[p].home;
                 jumps[p].center = new Vector2(x0 + half - 44f - br, h - 112f - br * 0.4f);
                 powers[p].center = new Vector2(jumps[p].center.x - br * 2f - 18f, jumps[p].center.y - 40f * ControlSettings.ButtonSize);
             }
@@ -75,14 +79,16 @@ namespace BorrowGravity
                 foreach (var ptr in pointers)
                 {
                     if (ptr.id == st.pointer) { pos = ptr.pos; break; }
-                    if (st.pointer == int.MinValue && ptr.began && Vector2.Distance(ptr.pos, st.center) < SR * 1.6f)
+                    if (st.pointer == int.MinValue && ptr.began && st.zone.Contains(ptr.pos) && !OnButton(ptr.pos))
                     {
+                        // floating joystick: it appears right under the thumb
                         st.pointer = ptr.id;
+                        st.center = ptr.pos;
                         pos = ptr.pos;
                         break;
                     }
                 }
-                if (pos == null) { st.pointer = int.MinValue; st.knob = Vector2.zero; st.input = Vector2.zero; }
+                if (pos == null) { st.pointer = int.MinValue; st.center = st.home; st.knob = Vector2.zero; st.input = Vector2.zero; }
                 else
                 {
                     Vector2 raw = (pos.Value - st.center) / SR;
@@ -102,14 +108,21 @@ namespace BorrowGravity
 
         int PlayerAt(float x) => NetSession.Online ? NetSession.LocalPlayer : (x < UIKit.Width * 0.5f ? 0 : 1);
 
+        /// <summary>Not for the camera: the HUD strip, a player's joystick half, or a button.</summary>
         bool OnControl(Vector2 pos)
         {
             if (pos.y < 110f) return true; // power panels, objective banner, pause button
             if (!Visible) return false;
             for (int p = 0; p < 2; p++)
+                if (Shows(p) && sticks[p].zone.Contains(pos)) return true;
+            return OnButton(pos);
+        }
+
+        bool OnButton(Vector2 pos)
+        {
+            for (int p = 0; p < 2; p++)
             {
                 if (!Shows(p)) continue;
-                if (Vector2.Distance(pos, sticks[p].center) < SR * 1.6f) return true;
                 if (Vector2.Distance(pos, jumps[p].center) < BR * 1.2f) return true;
                 if (Vector2.Distance(pos, powers[p].center) < BR * 1.2f) return true;
             }
