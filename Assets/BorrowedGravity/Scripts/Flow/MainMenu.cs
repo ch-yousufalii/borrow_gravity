@@ -17,9 +17,9 @@ namespace BorrowGravity
         public float orbitRadius = 34f;
         public float orbitHeight = 10f;
 
-        enum Row { Stage, Mode, Cutscene, Start, Controls, Quit }
-        static readonly Row[] Rows = { Row.Stage, Row.Mode, Row.Cutscene, Row.Start, Row.Controls, Row.Quit };
-        enum Overlay { None, Controls, Quit, Launch }
+        enum Row { Stage, Mode, Cutscene, Start, Controls, Settings, Quit }
+        static readonly Row[] Rows = { Row.Stage, Row.Mode, Row.Cutscene, Row.Start, Row.Controls, Row.Settings, Row.Quit };
+        enum Overlay { None, Controls, Quit, Launch, Settings }
 
         static readonly (string name, string hint, int diff)[] Stages =
         {
@@ -76,6 +76,11 @@ namespace BorrowGravity
                 return;
             }
             if (RoomPanelOpen) { RoomKeys(); return; }
+            if (overlay == Overlay.Settings)
+            {
+                if (SettingsPanel.HandleKeys()) CloseOverlay();
+                return;
+            }
             if (overlay != Overlay.None)
             {
                 if (PlayerKeys.Pressed(Key.Escape)) CloseOverlay();
@@ -120,6 +125,7 @@ namespace BorrowGravity
                     else { joinEntry = true; NetSession.LastError = ""; }
                     break;
                 case Row.Controls: overlay = Overlay.Controls; break;
+                case Row.Settings: overlay = Overlay.Settings; break;
                 case Row.Quit: overlay = Overlay.Quit; break;
                 default: Change(1); break;
             }
@@ -152,7 +158,7 @@ namespace BorrowGravity
             float avail = w - pad * 2f - gap;
             float leftW = avail * 1.15f / 2.15f, rightW = avail / 2.15f;
 
-            DrawBrand(pad, pad + 28f, leftW);
+            if (overlay != Overlay.Settings) DrawBrand(pad, pad + 28f, leftW); // the tall settings box would cover it
             if (menuLive) DrawPanel(w - pad - Mathf.Min(520f, rightW), Mathf.Min(520f, rightW), h, true);
 
             if (!string.IsNullOrEmpty(NetSession.LastError) && !RoomPanelOpen)
@@ -162,6 +168,7 @@ namespace BorrowGravity
             else if (overlay == Overlay.Controls) DrawControls(w, h);
             else if (overlay == Overlay.Quit) DrawQuit(w, h);
             else if (overlay == Overlay.Launch) DrawLaunch(w, h);
+            else if (overlay == Overlay.Settings) { if (SettingsPanel.Draw(w, h)) CloseOverlay(); }
             if (introFade > 0f) UIKit.Fill(new Rect(0, 0, w, h), new Color(0, 0, 0, introFade));
         }
 
@@ -209,14 +216,17 @@ namespace BorrowGravity
             MenuStyle.Text(start, "START", UIKit.Face.Heavy, 22, 1f, 0.4f);
             y += heights[3] + 8f;
 
-            // secondary: Controls | Quit
-            float half = (width - 8f) * 0.5f;
-            var ctl = new Rect(x, y, half, heights[4]);
-            var quit = new Rect(x + half + 8f, y, half, heights[4]);
+            // secondary: Controls | Settings | Quit
+            float third = (width - 16f) / 3f;
+            var ctl = new Rect(x, y, third, heights[4]);
+            var set = new Rect(x + third + 8f, y, third, heights[4]);
+            var quit = new Rect(x + (third + 8f) * 2f, y, third, heights[4]);
             RowFrame(ctl, (int)Row.Controls, false, live, mouseMoved);
+            RowFrame(set, (int)Row.Settings, false, live, mouseMoved);
             RowFrame(quit, (int)Row.Quit, false, live, mouseMoved);
-            MenuStyle.Text(ctl, "CONTROLS", UIKit.Face.Heavy, 14, 1f, 0.28f);
-            MenuStyle.Text(quit, "QUIT", UIKit.Face.Heavy, 14, 1f, 0.28f);
+            MenuStyle.Text(ctl, "CONTROLS", UIKit.Face.Heavy, 13, 1f, 0.22f);
+            MenuStyle.Text(set, "SETTINGS", UIKit.Face.Heavy, 13, 1f, 0.22f);
+            MenuStyle.Text(quit, "QUIT", UIKit.Face.Heavy, 13, 1f, 0.22f);
             y += heights[4] + 18f;
 
             // key hints

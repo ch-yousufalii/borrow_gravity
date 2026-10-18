@@ -20,7 +20,7 @@ namespace BorrowGravity
         [Tooltip("Camera turn per screen pixel of mouse movement (degrees).")]
         public float mouseLookSpeed = 0.12f;
 
-        class Stick { public int pointer = int.MinValue; public Vector2 center, knob; }
+        class Stick { public int pointer = int.MinValue; public Vector2 center, knob, input; }
         class Button { public Vector2 center; public bool held; }
 
         readonly Stick[] sticks = { new Stick(), new Stick() };
@@ -34,16 +34,21 @@ namespace BorrowGravity
         /// <summary>Online each phone shows only its own player's controls, across the whole screen.</summary>
         static bool Shows(int p) => !NetSession.Online || p == NetSession.LocalPlayer;
 
+        // sizes chosen in Settings (ControlSettings)
+        float SR => stickRadius * ControlSettings.StickSize;
+        float BR => buttonRadius * ControlSettings.ButtonSize;
+
         void Layout()
         {
             float w = UIKit.Width, h = UIKit.Height, half = NetSession.Online ? w : w * 0.5f;
-            float y = h - 150f;
+            float sr = SR, br = BR;
+            float y = h - 80f - sr;
             for (int p = 0; p < 2; p++)
             {
                 float x0 = NetSession.Online ? 0f : p * half;
-                sticks[p].center = new Vector2(x0 + 120f, y);
-                jumps[p].center = new Vector2(x0 + half - 90f, y + 18f);
-                powers[p].center = new Vector2(x0 + half - 200f, y - 22f);
+                sticks[p].center = new Vector2(x0 + 50f + sr, y);
+                jumps[p].center = new Vector2(x0 + half - 44f - br, h - 112f - br * 0.4f);
+                powers[p].center = new Vector2(jumps[p].center.x - br * 2f - 18f, jumps[p].center.y - 40f * ControlSettings.ButtonSize);
             }
         }
 
@@ -70,20 +75,25 @@ namespace BorrowGravity
                 foreach (var ptr in pointers)
                 {
                     if (ptr.id == st.pointer) { pos = ptr.pos; break; }
-                    if (st.pointer == int.MinValue && ptr.began && Vector2.Distance(ptr.pos, st.center) < stickRadius * 1.6f)
+                    if (st.pointer == int.MinValue && ptr.began && Vector2.Distance(ptr.pos, st.center) < SR * 1.6f)
                     {
                         st.pointer = ptr.id;
                         pos = ptr.pos;
                         break;
                     }
                 }
-                if (pos == null) { st.pointer = int.MinValue; st.knob = Vector2.zero; }
-                else st.knob = Vector2.ClampMagnitude((pos.Value - st.center) / stickRadius, 1f);
+                if (pos == null) { st.pointer = int.MinValue; st.knob = Vector2.zero; st.input = Vector2.zero; }
+                else
+                {
+                    Vector2 raw = (pos.Value - st.center) / SR;
+                    st.knob = Vector2.ClampMagnitude(raw, 1f);           // where the knob is drawn
+                    st.input = ControlSettings.ApplyStick(raw);          // dead zone + sensitivity
+                }
 
                 jumps[p].held = Touching(jumps[p].center, st.pointer);
                 powers[p].held = Touching(powers[p].center, st.pointer);
                 // GUI y points down, the game's "forward" is up on the stick
-                VirtualInput.Set(p, new Vector2(st.knob.x, -st.knob.y), jumps[p].held, powers[p].held);
+                VirtualInput.Set(p, new Vector2(st.input.x, -st.input.y), jumps[p].held, powers[p].held);
             }
         }
 
@@ -99,9 +109,9 @@ namespace BorrowGravity
             for (int p = 0; p < 2; p++)
             {
                 if (!Shows(p)) continue;
-                if (Vector2.Distance(pos, sticks[p].center) < stickRadius * 1.6f) return true;
-                if (Vector2.Distance(pos, jumps[p].center) < buttonRadius * 1.2f) return true;
-                if (Vector2.Distance(pos, powers[p].center) < buttonRadius * 1.2f) return true;
+                if (Vector2.Distance(pos, sticks[p].center) < SR * 1.6f) return true;
+                if (Vector2.Distance(pos, jumps[p].center) < BR * 1.2f) return true;
+                if (Vector2.Distance(pos, powers[p].center) < BR * 1.2f) return true;
             }
             return false;
         }
@@ -117,7 +127,7 @@ namespace BorrowGravity
                 if (lookPointers.TryGetValue(ptr.id, out var lp))
                 {
                     Vector2 d = ptr.pos - lp.last;
-                    if (playing) VirtualInput.AddLook(lp.player, new Vector2(d.x, d.y) * dragLookSpeed);
+                    if (playing) VirtualInput.AddLook(lp.player, new Vector2(d.x, d.y) * dragLookSpeed * ControlSettings.LookSensitivity);
                     lookPointers[ptr.id] = (ptr.pos, lp.player);
                 }
                 else if (ptr.began && !OnControl(ptr.pos)) lookPointers[ptr.id] = (ptr.pos, PlayerAt(ptr.pos.x));
@@ -137,13 +147,13 @@ namespace BorrowGravity
             if (delta.sqrMagnitude < 0.01f) return;
             Vector2 sp = mouse.position.ReadValue();
             if (sp.x < 0f || sp.y < 0f || sp.x > Screen.width || sp.y > Screen.height) return;
-            VirtualInput.AddLook(PlayerAt(sp.x / scale), new Vector2(delta.x, -delta.y) * mouseLookSpeed);
+            VirtualInput.AddLook(PlayerAt(sp.x / scale), new Vector2(delta.x, -delta.y) * mouseLookSpeed * ControlSettings.LookSensitivity);
         }
 
         bool Touching(Vector2 center, int ignorePointer)
         {
             foreach (var ptr in pointers)
-                if (ptr.id != ignorePointer && Vector2.Distance(ptr.pos, center) < buttonRadius * 1.2f) return true;
+                if (ptr.id != ignorePointer && Vector2.Distance(ptr.pos, center) < BR * 1.2f) return true;
             return false;
         }
 
@@ -180,13 +190,13 @@ namespace BorrowGravity
                 if (!Shows(p)) continue;
                 Color c = p == 0 ? UIKit.Sun : UIKit.Glow;
                 var st = sticks[p];
-                float d = stickRadius * 2f;
+                float d = SR * 2f;
                 UIKit.Dot(st.center, d, new Color(UIKit.Void.r, UIKit.Void.g, UIKit.Void.b, 0.35f));
-                UIKit.Tex(new Rect(st.center.x - stickRadius, st.center.y - stickRadius, d, d), icons?.Ring_Track, new Color(1, 1, 1, 0.7f));
-                var knob = st.center + st.knob * stickRadius;
-                UIKit.Dot(knob, 54f, new Color(c.r, c.g, c.b, st.pointer != int.MinValue ? 0.9f : 0.55f));
-                UIKit.Dot(knob, 30f, new Color(1, 1, 1, 0.35f));
-                UIKit.Text(new Rect(st.center.x - 60, st.center.y + stickRadius + 4, 120, 18), UIKit.Caps(p == 0 ? "Player A" : "Player B"), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
+                UIKit.Tex(new Rect(st.center.x - SR, st.center.y - SR, d, d), icons?.Ring_Track, new Color(1, 1, 1, 0.7f));
+                var knob = st.center + st.knob * SR;
+                UIKit.Dot(knob, 54f * ControlSettings.StickSize, new Color(c.r, c.g, c.b, st.pointer != int.MinValue ? 0.9f : 0.55f));
+                UIKit.Dot(knob, 30f * ControlSettings.StickSize, new Color(1, 1, 1, 0.35f));
+                UIKit.Text(new Rect(st.center.x - 60, st.center.y + SR + 4, 120, 18), UIKit.Caps(p == 0 ? "Player A" : "Player B"), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
                 DrawButton(jumps[p], c, "Jump", null);
                 DrawButton(powers[p], c, p == 0 ? "Gravity" : "Nullify", p == 0 ? icons?.Power_A_GravityController : icons?.Power_B_GravityNullifier);
             }
@@ -194,12 +204,12 @@ namespace BorrowGravity
 
         void DrawButton(Button b, Color c, string label, Texture icon)
         {
-            float d = buttonRadius * 2f;
+            float d = BR * 2f;
             UIKit.Dot(b.center, d, new Color(UIKit.Void.r, UIKit.Void.g, UIKit.Void.b, b.held ? 0.7f : 0.4f));
-            UIKit.Tex(new Rect(b.center.x - buttonRadius, b.center.y - buttonRadius, d, d), icons?.Ring_Track, b.held ? c : new Color(1, 1, 1, 0.7f));
-            if (icon != null) UIKit.Tex(new Rect(b.center.x - buttonRadius * 0.62f, b.center.y - buttonRadius * 0.62f, d * 0.62f, d * 0.62f), icon);
+            UIKit.Tex(new Rect(b.center.x - BR, b.center.y - BR, d, d), icons?.Ring_Track, b.held ? c : new Color(1, 1, 1, 0.7f));
+            if (icon != null) UIKit.Tex(new Rect(b.center.x - BR * 0.62f, b.center.y - BR * 0.62f, d * 0.62f, d * 0.62f), icon);
             else UIKit.Text(new Rect(b.center.x - 40, b.center.y - 12, 80, 24), UIKit.Caps(label), UIKit.Style(UIKit.Face.Display, 13, b.held ? c : UIKit.Ink, TextAnchor.MiddleCenter));
-            if (icon != null) UIKit.Text(new Rect(b.center.x - 50, b.center.y + buttonRadius + 2, 100, 16), UIKit.Caps(label), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
+            if (icon != null) UIKit.Text(new Rect(b.center.x - 50, b.center.y + BR + 2, 100, 16), UIKit.Caps(label), UIKit.Style(UIKit.Face.Display, 10, c, TextAnchor.MiddleCenter));
         }
     }
 }

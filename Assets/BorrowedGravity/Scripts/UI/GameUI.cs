@@ -142,6 +142,7 @@ namespace BorrowGravity
             DrawMessages(w, h);
             DrawHelp(w, h, sm);
             if (sm != null && sm.State == StageState.Paused) DrawPause(w, h, sm);
+            else SettingsOpen = false;
             if (sm != null && sm.State == StageState.Complete) DrawComplete(w, h, sm);
         }
 
@@ -554,16 +555,31 @@ namespace BorrowGravity
             MenuStyle.ShadowAlpha = 0.35f;
         }
 
+        /// <summary>The settings screen is open over the pause menu (on this device only).</summary>
+        public static bool SettingsOpen;
+
         void DrawPause(float w, float h, StageManager sm)
         {
-            UIKit.Shade(0.72f);
-            UIKit.Text(new Rect(0, h * 0.22f, w, 60), UIKit.Caps("Paused", 2), UIKit.Style(UIKit.Face.Display, 44, UIKit.Ink, TextAnchor.MiddleCenter));
+            MenuStyle.ShadowAlpha = 0.8f; // transparent over the live game
+            if (SettingsOpen)
+            {
+                if (SettingsPanel.Draw(w, h)) SettingsOpen = false;
+                MenuStyle.ShadowAlpha = 0.35f;
+                return;
+            }
+            MenuStyle.Text(new Rect(0, h * 0.2f, w, 50f), "PAUSED", UIKit.Face.Display, 40, 1f, 0.3f);
             for (int i = 0; i < StageManager.PauseItems.Length; i++)
             {
-                var r = new Rect(w * 0.5f - 200, h * 0.38f + i * 62, 400, 50);
-                if (UIKit.Button(r, StageManager.PauseItems[i], sm.PauseSelection == i)) { sm.PauseSelection = i; sm.ChoosePauseItem(i); }
+                var r = new Rect(w * 0.5f - 210, h * 0.33f + i * 58, 420, 48);
+                bool active = sm.PauseSelection == i, hover = r.Contains(Event.current.mousePosition);
+                MenuStyle.Box(r, active ? MenuStyle.W50 : hover ? MenuStyle.W25 : MenuStyle.W12, 1f);
+                if (active) MenuStyle.Brackets(r);
+                MenuStyle.Text(r, StageManager.PauseItems[i].ToUpperInvariant(), UIKit.Face.Heavy, 15, 1f, 0.22f);
+                if (hover && Event.current.type == EventType.MouseDown) { Event.current.Use(); sm.PauseSelection = i; sm.ChoosePauseItem(i); }
             }
-            UIKit.Text(new Rect(0, h * 0.38f + StageManager.PauseItems.Length * 62 + 12, w, 22), "W / S or arrows  ·  Space / Enter to confirm  ·  Esc to resume", UIKit.Style(UIKit.Face.Body, 14, UIKit.Dim, TextAnchor.MiddleCenter));
+            MenuStyle.Text(new Rect(0, h * 0.33f + StageManager.PauseItems.Length * 58 + 14, w, 18), "W / S choose  ·  Space / Enter confirm  ·  Esc resume",
+                UIKit.Face.Body, 13, MenuStyle.W50);
+            MenuStyle.ShadowAlpha = 0.35f;
         }
 
         void DrawComplete(float w, float h, StageManager sm)

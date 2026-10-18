@@ -1,0 +1,69 @@
+using UnityEngine;
+
+namespace BorrowGravity
+{
+    /// <summary>
+    /// Player-adjustable control settings, saved on this device: on-screen button size, joystick size, joystick
+    /// sensitivity (how far you drag for full speed) and camera-look sensitivity (finger drag / mouse).
+    /// </summary>
+    public static class ControlSettings
+    {
+        public const float MinSize = 0.6f, MaxSize = 1.6f, SizeStep = 0.1f;
+        public const float MinSens = 0.5f, MaxSens = 2.5f, SensStep = 0.1f;
+        public const float DeadZone = 0.1f;
+
+        const string KeyButton = "bg_btn_size", KeyStick = "bg_stick_size", KeyStickSens = "bg_stick_sens", KeyLook = "bg_look_sens";
+
+        static bool loaded;
+        static float buttonSize = 1f, stickSize = 1f, stickSensitivity = 1f, lookSensitivity = 1f;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => loaded = false;
+
+        static void Load()
+        {
+            if (loaded) return;
+            loaded = true;
+            buttonSize = Mathf.Clamp(PlayerPrefs.GetFloat(KeyButton, 1f), MinSize, MaxSize);
+            stickSize = Mathf.Clamp(PlayerPrefs.GetFloat(KeyStick, 1f), MinSize, MaxSize);
+            stickSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyStickSens, 1f), MinSens, MaxSens);
+            lookSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyLook, 1f), MinSens, MaxSens);
+        }
+
+        /// <summary>Scale of the JUMP / POWER buttons (1 = default).</summary>
+        public static float ButtonSize { get { Load(); return buttonSize; } set { Load(); buttonSize = Snap(value, MinSize, MaxSize); Save(); } }
+        /// <summary>Scale of the joystick (1 = default).</summary>
+        public static float StickSize { get { Load(); return stickSize; } set { Load(); stickSize = Snap(value, MinSize, MaxSize); Save(); } }
+        /// <summary>Higher = less drag needed for full speed (1 = full speed at the joystick's edge).</summary>
+        public static float StickSensitivity { get { Load(); return stickSensitivity; } set { Load(); stickSensitivity = Snap(value, MinSens, MaxSens); Save(); } }
+        /// <summary>Multiplier on camera turning from finger drags and the mouse.</summary>
+        public static float LookSensitivity { get { Load(); return lookSensitivity; } set { Load(); lookSensitivity = Snap(value, MinSens, MaxSens); Save(); } }
+
+        static float Snap(float v, float min, float max) => Mathf.Clamp(Mathf.Round(v * 10f) / 10f, min, max);
+
+        static void Save()
+        {
+            PlayerPrefs.SetFloat(KeyButton, buttonSize);
+            PlayerPrefs.SetFloat(KeyStick, stickSize);
+            PlayerPrefs.SetFloat(KeyStickSens, stickSensitivity);
+            PlayerPrefs.SetFloat(KeyLook, lookSensitivity);
+            PlayerPrefs.Save();
+        }
+
+        public static void ResetToDefaults()
+        {
+            Load();
+            buttonSize = stickSize = stickSensitivity = lookSensitivity = 1f;
+            Save();
+        }
+
+        /// <summary>Raw joystick deflection (0..1+, unclamped) → movement amount with dead zone and sensitivity.</summary>
+        public static Vector2 ApplyStick(Vector2 raw)
+        {
+            float m = raw.magnitude;
+            if (m <= DeadZone) return Vector2.zero;
+            float k = Mathf.Clamp01((m - DeadZone) / (1f - DeadZone) * StickSensitivity);
+            return raw / m * k;
+        }
+    }
+}

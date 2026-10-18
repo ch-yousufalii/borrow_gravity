@@ -80,6 +80,7 @@ namespace BorrowGravity
                     else ResetHold = 0f;
                     break;
                 case StageState.Paused:
+                    if (GameUI.SettingsOpen) { if (SettingsPanel.HandleKeys()) GameUI.SettingsOpen = false; break; }
                     if (PlayerKeys.Pressed(UnityEngine.InputSystem.Key.Escape)) { Resume(); break; }
                     if (PlayerKeys.Pressed(UnityEngine.InputSystem.Key.W) || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.UpArrow))
                         PauseSelection = (PauseSelection + PauseItems.Length - 1) % PauseItems.Length;
@@ -124,6 +125,7 @@ namespace BorrowGravity
                     else ResetHold = 0f;
                     break;
                 case StageState.Paused:
+                    if (GameUI.SettingsOpen) { if (SettingsPanel.HandleKeys()) GameUI.SettingsOpen = false; break; }
                     if (PlayerKeys.Pressed(UnityEngine.InputSystem.Key.Escape)) NetSession.SendAction(NetAction.Pause);
                     if (PlayerKeys.Pressed(UnityEngine.InputSystem.Key.W) || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.UpArrow))
                         PauseSelection = (PauseSelection + PauseItems.Length - 1) % PauseItems.Length;
@@ -164,10 +166,12 @@ namespace BorrowGravity
                 || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.NumpadEnter) || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.RightCtrl);
         }
 
-        public static readonly string[] PauseItems = { "Resume", "Restart from checkpoint", "Restart stage", "Main menu" };
+        public static readonly string[] PauseItems = { "Resume", "Restart from checkpoint", "Restart stage", "Settings", "Main menu" };
+        const int SettingsItem = 3;
 
         public void ChoosePauseItem(int i)
         {
+            if (i == SettingsItem) { GameUI.SettingsOpen = true; return; } // per device, never sent to the host
             if (NetSession.IsClient) { NetSession.SendAction(NetAction.PauseItem, i); return; }
             switch (i)
             {
