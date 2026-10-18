@@ -21,7 +21,11 @@ namespace BorrowGravity
         [Tooltip("Camera turn per screen pixel of mouse movement (degrees).")]
         public float mouseLookSpeed = 0.12f;
 
-        // home = resting spot; center = where the thumb landed (floating joystick); zone = the left half of this player's screen
+        // home = where the joystick sits (it never moves); center = its centre (always home); zone = the left half of
+        // this player's screen, kept for the stick (no camera turning there)
+        /// <summary>A press this many stick radii from the joystick's centre still grabs it.</summary>
+        const float GrabRadius = 1.6f;
+
         class Stick { public int pointer = int.MinValue; public Vector2 center, home, knob, input; public Rect zone; }
         class Button { public Vector2 center; public bool held; }
 
@@ -115,11 +119,11 @@ namespace BorrowGravity
                 foreach (var ptr in pointers)
                 {
                     if (ptr.id == st.pointer) { pos = ptr.pos; break; }
-                    if (st.pointer == int.MinValue && ptr.began && st.zone.Contains(ptr.pos) && !OnButton(ptr.pos))
+                    if (st.pointer == int.MinValue && ptr.began && Vector2.Distance(ptr.pos, st.home) < SR * GrabRadius && !OnButton(ptr.pos))
                     {
-                        // floating joystick: it appears right under the thumb
+                        // fixed joystick: grab it on (or just around) the stick; it stays where it is
                         st.pointer = ptr.id;
-                        st.center = ptr.pos;
+                        st.center = st.home;
                         pos = ptr.pos;
                         break;
                     }
@@ -253,7 +257,7 @@ namespace BorrowGravity
                 }
                 else
                 {
-                    // white outline joystick (floating: drawn where the thumb landed)
+                    // white outline joystick, always at its home spot
                     var ring = new Rect(st.center.x - SR, st.center.y - SR, SR * 2f, SR * 2f);
                     MenuStyle.Box(ring, st.pointer != int.MinValue ? MenuStyle.W80 : MenuStyle.W50, 1f, SR);
                     var knob = st.center + st.knob * SR;
