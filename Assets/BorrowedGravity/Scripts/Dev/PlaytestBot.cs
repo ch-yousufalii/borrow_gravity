@@ -103,7 +103,8 @@ namespace BorrowGravity.Dev
         {
             var p = Players.Get(index);
             if (p == null) yield break;
-            Key right = p.keys.right, left = p.keys.left, jump = p.keys.jump;
+            // third-person camera faces along the level (+X): forward/back walk it
+            Key right = p.keys.up, left = p.keys.down, jump = p.keys.jump;
             float t = 0f;
             while (t < 15f && Mathf.Abs(p.transform.position.x - x) > 0.15f)
             {

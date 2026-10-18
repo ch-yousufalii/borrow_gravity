@@ -18,8 +18,8 @@ namespace BorrowGravity
         public PlayerController playerA, playerB;
         public GravityPower gravityPower;
         public NullifyPower nullifyPower;
-        public string controlsA = "WASD move · Space jump · E switch zone gravity";
-        public string controlsB = "Arrows move · R-Ctrl / Enter jump · R-Shift tap: nullify, hold: steer";
+        public string controlsA = "WASD / arrows move · mouse or drag to look · Space jump · E switch zone gravity";
+        public string controlsB = "WASD / arrows move · mouse or drag to look · Space jump · E tap: nullify, hold: steer";
 
         class Timed { public string text; public float until; public HudHazard hazard; public float countdownEnd; public float start; }
         Timed warning, checkpoint, message, hint;
@@ -138,6 +138,7 @@ namespace BorrowGravity
             DrawWarning(w);
             DrawCheckpoint(w);
             DrawEngine(w, h);
+            DrawParts(w);
             DrawMessages(w, h);
             DrawHelp(w, h, sm);
             if (sm != null && sm.State == StageState.Paused) DrawPause(w, h, sm);
@@ -273,7 +274,7 @@ namespace BorrowGravity
         {
             if (countdownValue == null) return;
             float left = Mathf.Max(0f, countdownValue());
-            var c = new Vector2(w * 0.5f, EngineCarrier.Instance != null ? 300 : 262);
+            var c = new Vector2(w * 0.5f, EngineCarrier.Instance != null ? 300 : 300);
             bool urgent = left < 10f;
             float pulse = urgent ? 1f + 0.06f * Mathf.Sin(Time.time * 12f) : 1f;
             float s = 116f * pulse;
@@ -286,7 +287,7 @@ namespace BorrowGravity
         {
             float a = Fade(warning);
             if (a <= 0f) return;
-            var r = new Rect(w * 0.5f - 320 + (1 - a) * 40f, EngineCarrier.Instance != null ? 212 : 140, 640, 120);
+            var r = new Rect(w * 0.5f - 320 + (1 - a) * 40f, EngineCarrier.Instance != null ? 212 : 216, 640, 120);
             var old = GUI.color;
             GUI.color = new Color(1, 1, 1, a);
             UIKit.Tex(r, icons?.Banner_Danger);
@@ -308,7 +309,7 @@ namespace BorrowGravity
         {
             float a = Fade(checkpoint);
             if (a <= 0f) return;
-            var r = new Rect(w * 0.5f - 250, (EngineCarrier.Instance != null ? 336 : 272) - (1 - a) * 20f, 500, 94);
+            var r = new Rect(w * 0.5f - 250, (EngineCarrier.Instance != null ? 336 : 344) - (1 - a) * 20f, 500, 94);
             var old = GUI.color;
             GUI.color = new Color(1, 1, 1, a);
             UIKit.Tex(r, icons?.Banner_Checkpoint);
@@ -337,6 +338,39 @@ namespace BorrowGravity
                 UIKit.Text(new Rect(meter.x, meter.yMax + 2, meter.width + 160, 22), "TILTING — LEVEL THE ENGINE!", UIKit.Style(UIKit.Face.Display, 15, UIKit.Danger, TextAnchor.MiddleCenter));
         }
 
+        /// <summary>Stage 3: who has their engine half (waiting / in hand / installed), under this screen's power panel.</summary>
+        void DrawParts(float w)
+        {
+            int mask = NetSession.IsClient ? NetHud.partsMask : PartsMask();
+            if (mask == 0) return;
+            bool right = NetSession.IsClient;
+            var r = new Rect(right ? w - 18 - 344 : 18, 148, 344, 40);
+            UIKit.Panel(r);
+            UIKit.Text(new Rect(r.x + 14, r.y, 90, r.height), UIKit.Caps("Engine"), UIKit.Style(UIKit.Face.Display, 11, UIKit.Dim, TextAnchor.MiddleLeft));
+            for (int p = 0; p < 2; p++)
+            {
+                int state = (mask >> (p * 2)) & 3; // 1 waiting, 2 held, 3 installed
+                Color c = p == 0 ? UIKit.Sun : UIKit.Glow;
+                string label = state == 3 ? "Installed" : state == 2 ? "In hand" : "Pick it up";
+                var cell = new Rect(r.x + 96 + p * 122, r.y + 8, 114, 24);
+                UIKit.Dot(new Vector2(cell.x + 8, cell.center.y), 12f, state == 1 ? new Color(c.r, c.g, c.b, 0.35f) : state == 3 ? UIKit.Good : c);
+                UIKit.Text(new Rect(cell.x + 18, cell.y, cell.width - 18, cell.height), (p == 0 ? "A  " : "B  ") + label,
+                    UIKit.Style(UIKit.Face.Heavy, 12, state == 1 ? UIKit.Dim : UIKit.Ink, TextAnchor.MiddleLeft));
+            }
+        }
+
+        /// <summary>Two bits per half (A low, B high): 0 none, 1 waiting, 2 held, 3 installed.</summary>
+        public static int PartsMask()
+        {
+            int mask = 0;
+            foreach (var part in EnginePart.All)
+            {
+                int s = part.State == EnginePart.PartState.Installed ? 3 : part.State == EnginePart.PartState.Held ? 2 : 1;
+                mask |= s << (Mathf.Clamp(part.owner, 0, 1) * 2);
+            }
+            return mask;
+        }
+
         void DrawMessages(float w, float h)
         {
             float a = Fade(message);
@@ -345,7 +379,8 @@ namespace BorrowGravity
             float b = Fade(hint, 0.3f, 0.5f);
             if (b > 0f)
             {
-                float y = h - (showHelp ? 220 : 150) - (VirtualControls.Visible ? 140 : 0);
+                // under the title banner: in third person the bottom-middle of the screen is the player's back
+                float y = 132f;
                 var r = new Rect(w * 0.5f - 400, y, 800, 74);
                 var old = GUI.color;
                 GUI.color = new Color(1, 1, 1, b);

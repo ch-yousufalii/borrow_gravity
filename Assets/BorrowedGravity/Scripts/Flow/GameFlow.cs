@@ -30,6 +30,15 @@ namespace BorrowGravity
             PendingStage = 1;
         }
 
+        /// <summary>Phones default to 30 fps and dim the screen while you only touch it: run at 60 and stay awake.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void MobileSetup()
+        {
+            if (!Application.isMobilePlatform) return;
+            Application.targetFrameRate = 60;
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
+        }
+
         public static int Unlocked
         {
             get => Mathf.Clamp(PlayerPrefs.GetInt(UnlockKey, 1), 1, StageScenes.Length);

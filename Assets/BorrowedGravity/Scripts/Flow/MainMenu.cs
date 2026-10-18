@@ -24,6 +24,9 @@ namespace BorrowGravity
         int row = (int)Row.Start;
         int stage;
         int mode;
+
+        /// <summary>No split screen anywhere: every player has their own device (laptop or phone) and full screen, via a room.</summary>
+        static bool PhoneOnly => true;
         bool joinEntry;
         string joinCode = "";
         bool cutscene = true;
@@ -36,6 +39,7 @@ namespace BorrowGravity
         {
             Time.timeScale = 1f;
             if (NetSession.Online) mode = NetSession.IsHost ? 1 : 2;
+            else if (PhoneOnly) mode = 1;
             else DevCommandLine();
             Sfx.SetLoop(LoopId.Ambience, true, 0.35f);
         }
@@ -85,6 +89,7 @@ namespace BorrowGravity
                     break;
                 case Row.Mode:
                     mode = (mode + d + ModeNames.Length) % ModeNames.Length;
+                    if (PhoneOnly && mode == 0) mode = d > 0 ? 1 : 2;
                     break;
                 default:
                     return;
@@ -298,13 +303,13 @@ namespace BorrowGravity
             UIKit.PowerRing(new Rect(r.x + 30, r.y + 40, 96, 96), icons?.Ring_Track, icons?.Ring_Cooldown, icons?.Power_A_GravityController, 1f, UIKit.Sun);
             UIKit.Text(new Rect(r.x + 146, r.y + 40, 760, 20), UIKit.Caps("Player A  ·  Gravity Controller"), UIKit.Style(UIKit.Face.Display, 14, UIKit.Sun));
             UIKit.Text(new Rect(r.x + 146, r.y + 64, 770, 110),
-                "WASD move · Space jump · E switch the gravity of the nearest marked zone (down / zero-g / up / onto walls). " +
-                "Changing a zone affects everything inside it — sometimes you two as well.", UIKit.Style(UIKit.Face.Body, 18, UIKit.Ink, TextAnchor.UpperLeft, true));
+                "Host the room. WASD / arrows move · mouse or finger drag turns the camera · Space jump · E switch the gravity of the nearest " +
+                "marked zone (down / zero-g / up / onto walls). Changing a zone affects everything inside it — sometimes you two as well.", UIKit.Style(UIKit.Face.Body, 18, UIKit.Ink, TextAnchor.UpperLeft, true));
             UIKit.PowerRing(new Rect(r.x + 30, r.y + 210, 96, 96), icons?.Ring_Track, icons?.Ring_Cooldown, icons?.Power_B_GravityNullifier, 1f, UIKit.Glow);
             UIKit.Text(new Rect(r.x + 146, r.y + 210, 760, 20), UIKit.Caps("Player B  ·  Gravity Nullifier"), UIKit.Style(UIKit.Face.Display, 14, UIKit.Glow));
             UIKit.Text(new Rect(r.x + 146, r.y + 234, 770, 130),
-                "Arrows move · Right Ctrl / Enter jump · Right Shift tap: freeze the object in front of you for a few seconds. " +
-                "Hold Right Shift: steer it sideways with the arrows. Tap again to drop it.\nHold R to reset to the last checkpoint · Esc pauses.",
+                "Join the room with its code. Same keys: WASD / arrows · mouse or drag to look · Space jump · E tap: freeze the object in front of you. " +
+                "Hold E: steer it. Tap again to drop it.\nPhones: joystick, JUMP and POWER buttons. Hold R to reset to the checkpoint · Esc pauses.",
                 UIKit.Style(UIKit.Face.Body, 18, UIKit.Ink, TextAnchor.UpperLeft, true));
             if (UIKit.Button(new Rect(r.center.x - 90, r.yMax - 56, 180, 40), "Back", true, 15)) showControls = false;
         }

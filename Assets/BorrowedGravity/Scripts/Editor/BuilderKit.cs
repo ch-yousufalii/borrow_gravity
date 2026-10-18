@@ -461,7 +461,71 @@ namespace BorrowGravity.EditorTools
             h.sectionTitle = sectionTitle;
             h.message = message;
             h.duration = duration;
+            Board(ctx, sectionTitle, message, center + new Vector3(2.6f, 1.5f, 0f));
             return h;
+        }
+
+        /// <summary>A floating instruction board (title + text) that turns to face the camera — see <see cref="InfoBoard"/>.</summary>
+        public static InfoBoard Board(StageContext ctx, string titleText, string bodyText, Vector3 at)
+        {
+            var font = AssetDatabase.LoadAssetAtPath<Font>("Assets/Resources/Fonts/Lato-Bold.ttf");
+            var root = new GameObject("Board_" + titleText);
+            root.transform.SetParent(ctx.Group("Boards"), false);
+            root.transform.position = at;
+            var board = root.AddComponent<InfoBoard>();
+
+            TextMesh Text(string name, string text, int size, Color color, float y)
+            {
+                var go = new GameObject(name);
+                go.transform.SetParent(root.transform, false);
+                go.transform.localPosition = new Vector3(0f, y, 0f);
+                var tm = go.AddComponent<TextMesh>();
+                tm.text = text;
+                tm.font = font;
+                tm.fontSize = size;
+                tm.characterSize = 0.012f;
+                tm.anchor = TextAnchor.UpperCenter;
+                tm.alignment = TextAlignment.Center;
+                tm.color = color;
+                if (font != null) go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+                return tm;
+            }
+            board.title = Text("Title", titleText.ToUpperInvariant(), 72, new Color(1f, 0.62f, 0.36f), 0f);
+            board.body = Text("Body", Wrap(bodyText, 40), 54, new Color(0.96f, 0.92f, 0.95f), -0.32f);
+
+            Transform Quad(string name, Material mat)
+            {
+                var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                Object.DestroyImmediate(q.GetComponent<Collider>());
+                q.name = name;
+                q.transform.SetParent(root.transform, false);
+                q.GetComponent<Renderer>().sharedMaterial = mat;
+                q.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+                return q.transform;
+            }
+            board.panel = Quad("Panel", Transparent("BoardPanel", new Color(0.08f, 0.04f, 0.12f, 0.78f)));
+            board.edge = Quad("Edge", Lit("BoardEdge", new Color(1f, 0.62f, 0.36f), new Color(1f, 0.62f, 0.36f) * 2f));
+            return board;
+        }
+
+        /// <summary>Word-wrap for 3D text (keeps existing line breaks).</summary>
+        static string Wrap(string text, int width)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var para in text.Split('\n'))
+            {
+                int col = 0;
+                foreach (var word in para.Split(' '))
+                {
+                    if (word.Length == 0) continue;
+                    if (col > 0 && col + 1 + word.Length > width) { sb.Append('\n'); col = 0; }
+                    else if (col > 0) { sb.Append(' '); col++; }
+                    sb.Append(word);
+                    col += word.Length;
+                }
+                sb.Append('\n');
+            }
+            return sb.ToString().TrimEnd('\n');
         }
 
         public static Light PointLight(Transform parent, Vector3 pos, Color c, float range = 6f, float intensity = 3f)
@@ -551,8 +615,17 @@ namespace BorrowGravity.EditorTools
             Part(m, PrimitiveType.Sphere, "Visor", new Vector3(0f, 0.63f, 0.17f), new Vector3(0.44f, 0.32f, 0.36f), visor);
             Part(m, PrimitiveType.Cube, "Backpack", new Vector3(0f, 0.15f, -0.38f), new Vector3(0.56f, 0.66f, 0.26f), dark);
             Part(m, PrimitiveType.Cube, "BackpackLight", new Vector3(0f, 0.32f, -0.52f), new Vector3(0.34f, 0.07f, 0.03f), glow);
-            Part(m, PrimitiveType.Cylinder, "Antenna", new Vector3(0.2f, 0.62f, -0.4f), new Vector3(0.03f, 0.2f, 0.03f), dark);
-            Part(m, PrimitiveType.Sphere, "AntennaTip", new Vector3(0.2f, 0.84f, -0.4f), Vector3.one * 0.06f, glow);
+            // two antennas on top of the helmet, splayed into a V, with glowing tips
+            foreach (float side in new[] { -1f, 1f })
+            {
+                var basePos = new Vector3(side * 0.11f, 0.88f, -0.02f);
+                var tilt = Quaternion.Euler(-12f, 0f, -side * 24f);
+                Vector3 dir = tilt * Vector3.up;
+                const float len = 0.34f;
+                Part(m, PrimitiveType.Sphere, side < 0 ? "AntennaBaseL" : "AntennaBaseR", basePos, Vector3.one * 0.07f, dark);
+                Part(m, PrimitiveType.Cylinder, side < 0 ? "AntennaL" : "AntennaR", basePos + dir * (len * 0.5f), new Vector3(0.024f, len * 0.5f, 0.024f), dark, tilt);
+                Part(m, PrimitiveType.Sphere, side < 0 ? "AntennaTipL" : "AntennaTipR", basePos + dir * len, Vector3.one * 0.085f, glow);
+            }
             Transform Limb(string name, Vector3 pivot, Vector3 size, Material mat)
             {
                 var j = new GameObject(name).transform;
@@ -576,13 +649,14 @@ namespace BorrowGravity.EditorTools
             return model;
         }
 
-        static void Part(Transform parent, PrimitiveType type, string name, Vector3 local, Vector3 scale, Material mat)
+        static void Part(Transform parent, PrimitiveType type, string name, Vector3 local, Vector3 scale, Material mat, Quaternion? rotation = null)
         {
             var go = GameObject.CreatePrimitive(type);
             Object.DestroyImmediate(go.GetComponent<Collider>());
             go.name = name;
             go.transform.SetParent(parent, false);
             go.transform.localPosition = local;
+            go.transform.localRotation = rotation ?? Quaternion.identity;
             go.transform.localScale = scale;
             go.GetComponent<Renderer>().sharedMaterial = mat;
         }

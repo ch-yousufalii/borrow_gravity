@@ -23,7 +23,7 @@ namespace BorrowGravity
         {
             nameof(PlayerController), nameof(GameUI), nameof(CoopCamera), nameof(VirtualControls), nameof(SuitAnimator),
             nameof(TimeOfDay), nameof(PlayerCameraLink), nameof(StageManager), nameof(NetWorld), nameof(GravityZone),
-            nameof(Cutscene), nameof(GameStages), nameof(StageRoot)
+            nameof(Cutscene), nameof(GameStages), nameof(StageRoot), nameof(InfoBoard)
         };
 
         readonly List<Transform> list = new List<Transform>();
@@ -66,6 +66,7 @@ namespace BorrowGravity
                 foreach (var t in root.GetComponentsInChildren<Transform>(true))
                 {
                     if (t.GetComponentInParent<Camera>(true) != null) continue;
+                    if (t.GetComponentInParent<InfoBoard>(true) != null) continue; // each device turns its boards to its own camera
                     indexOf[t] = list.Count;
                     list.Add(t);
                 }
@@ -298,6 +299,7 @@ namespace BorrowGravity
             w.Write(e != null ? e.SignedTilt : 0f);
             w.Write(e != null ? e.tiltLimit : 30f);
             w.Write(GameUI.CountdownLeft);
+            w.Write((byte)GameUI.PartsMask());
 
             for (int p = 0; p < 2; p++)
             {
@@ -385,6 +387,7 @@ namespace BorrowGravity
             NetHud.engineSignedTilt = r.ReadSingle();
             NetHud.engineTiltLimit = r.ReadSingle();
             NetHud.countdownLeft = r.ReadSingle();
+            NetHud.partsMask = r.ReadByte();
 
             for (int p = 0; p < 2; p++)
             {

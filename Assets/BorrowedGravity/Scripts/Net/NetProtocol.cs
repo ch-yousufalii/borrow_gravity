@@ -28,6 +28,7 @@ namespace BorrowGravity
         public static float engineStability01 = 1f, engineTilt, engineSignedTilt, engineTiltLimit = 30f;
         public static float countdownLeft = -1f;
         public static float resetHold;
+        public static int partsMask;
 
         public static void Clear()
         {
@@ -38,6 +39,7 @@ namespace BorrowGravity
             engineTilt = engineSignedTilt = 0f;
             countdownLeft = -1f;
             resetHold = 0f;
+            partsMask = 0;
         }
     }
 }

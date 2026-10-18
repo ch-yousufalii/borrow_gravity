@@ -9,6 +9,8 @@ namespace BorrowGravity
         public float swing = 38f;
         public float speedForFullSwing = 5f;
         public float cadence = 9f;
+        [Tooltip("Arms forward as if carrying something (cutscene actors).")]
+        public bool holdArms;
 
         Vector3 lastPos;
         float phase, amount, hold;
@@ -30,7 +32,7 @@ namespace BorrowGravity
             phase += dt * cadence * Mathf.Lerp(0.4f, 1f, amount);
             float s = Mathf.Sin(phase) * swing * amount;
             // holding the engine: both arms reach forward and stay there
-            hold = Mathf.MoveTowards(hold, player != null && (player.IsPushing || player.IsCarrying) ? 1f : 0f, dt * 6f);
+            hold = Mathf.MoveTowards(hold, holdArms || (player != null && (player.IsPushing || player.IsCarrying)) ? 1f : 0f, dt * 6f);
             Set(leftArm, Mathf.Lerp(s, -80f, hold));
             Set(rightArm, Mathf.Lerp(-s, -80f, hold));
             Set(leftLeg, -s * 0.8f);

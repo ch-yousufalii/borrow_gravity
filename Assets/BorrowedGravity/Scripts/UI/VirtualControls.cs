@@ -15,6 +15,10 @@ namespace BorrowGravity
         public HudIcons icons;
         public float stickRadius = 70f;
         public float buttonRadius = 46f;
+        [Tooltip("Camera turn per reference-pixel of finger drag (degrees).")]
+        public float dragLookSpeed = 0.28f;
+        [Tooltip("Camera turn per screen pixel of mouse movement (degrees).")]
+        public float mouseLookSpeed = 0.12f;
 
         class Stick { public int pointer = int.MinValue; public Vector2 center, knob; }
         class Button { public Vector2 center; public bool held; }
@@ -24,6 +28,8 @@ namespace BorrowGravity
         readonly Button[] powers = { new Button(), new Button() };
         readonly List<(int id, Vector2 pos, bool began)> pointers = new List<(int, Vector2, bool)>();
         bool mouseWasDown;
+        readonly Dictionary<int, (Vector2 last, int player)> lookPointers = new Dictionary<int, (Vector2, int)>();
+        readonly HashSet<int> alive = new HashSet<int>();
 
         /// <summary>Online each phone shows only its own player's controls, across the whole screen.</summary>
         static bool Shows(int p) => !NetSession.Online || p == NetSession.LocalPlayer;
@@ -44,15 +50,16 @@ namespace BorrowGravity
         void Update()
         {
             if (PlayerKeys.Pressed(Key.J)) Visible = !Visible;
+            float s = Screen.height / UIKit.ReferenceHeight;
+            if (s <= 0f) return;
+            Layout();
+            GatherPointers(s);
+            Look(s);
             if (!Visible)
             {
                 for (int p = 0; p < 2; p++) if (Shows(p)) VirtualInput.Set(p, Vector2.zero, false, false);
                 return;
             }
-            float s = Screen.height / UIKit.ReferenceHeight;
-            if (s <= 0f) return;
-            Layout();
-            GatherPointers(s);
 
             for (int p = 0; p < 2; p++)
             {
@@ -81,6 +88,58 @@ namespace BorrowGravity
         }
 
 
+        // ---------- camera look: drag a finger (or the mouse) anywhere that isn't a control; or just move the mouse ----------
+
+        int PlayerAt(float x) => NetSession.Online ? NetSession.LocalPlayer : (x < UIKit.Width * 0.5f ? 0 : 1);
+
+        bool OnControl(Vector2 pos)
+        {
+            if (pos.y < 110f) return true; // power panels, objective banner, pause button
+            if (!Visible) return false;
+            for (int p = 0; p < 2; p++)
+            {
+                if (!Shows(p)) continue;
+                if (Vector2.Distance(pos, sticks[p].center) < stickRadius * 1.6f) return true;
+                if (Vector2.Distance(pos, jumps[p].center) < buttonRadius * 1.2f) return true;
+                if (Vector2.Distance(pos, powers[p].center) < buttonRadius * 1.2f) return true;
+            }
+            return false;
+        }
+
+        void Look(float scale)
+        {
+            var sm = StageManager.Instance;
+            bool playing = sm != null && sm.isActiveAndEnabled && sm.State == StageState.Playing;
+            alive.Clear();
+            foreach (var ptr in pointers)
+            {
+                alive.Add(ptr.id);
+                if (lookPointers.TryGetValue(ptr.id, out var lp))
+                {
+                    Vector2 d = ptr.pos - lp.last;
+                    if (playing) VirtualInput.AddLook(lp.player, new Vector2(d.x, d.y) * dragLookSpeed);
+                    lookPointers[ptr.id] = (ptr.pos, lp.player);
+                }
+                else if (ptr.began && !OnControl(ptr.pos)) lookPointers[ptr.id] = (ptr.pos, PlayerAt(ptr.pos.x));
+            }
+            if (lookPointers.Count > 0)
+            {
+                var gone = new List<int>();
+                foreach (var id in lookPointers.Keys) if (!alive.Contains(id)) gone.Add(id);
+                foreach (var id in gone) lookPointers.Remove(id);
+            }
+
+            // laptop: moving the mouse turns the camera of the player whose half it is over (not while a button is held)
+            var mouse = Mouse.current;
+            if (!playing || Application.isMobilePlatform || mouse == null || pointers.Count > 0) return;
+            if (mouse.leftButton.isPressed || mouse.rightButton.isPressed) return;
+            Vector2 delta = mouse.delta.ReadValue();
+            if (delta.sqrMagnitude < 0.01f) return;
+            Vector2 sp = mouse.position.ReadValue();
+            if (sp.x < 0f || sp.y < 0f || sp.x > Screen.width || sp.y > Screen.height) return;
+            VirtualInput.AddLook(PlayerAt(sp.x / scale), new Vector2(delta.x, -delta.y) * mouseLookSpeed);
+        }
+
         bool Touching(Vector2 center, int ignorePointer)
         {
             foreach (var ptr in pointers)
@@ -99,8 +158,9 @@ namespace BorrowGravity
                     var sp = t.position.ReadValue();
                     pointers.Add((t.touchId.ReadValue(), new Vector2(sp.x / s, (Screen.height - sp.y) / s), t.press.wasPressedThisFrame));
                 }
+            // some phones also report a finger as a mouse: only use the mouse when no finger is down
             var mouse = Mouse.current;
-            if (mouse != null && mouse.leftButton.isPressed)
+            if (mouse != null && mouse.leftButton.isPressed && pointers.Count == 0)
             {
                 var sp = mouse.position.ReadValue();
                 pointers.Add((-1, new Vector2(sp.x / s, (Screen.height - sp.y) / s), !mouseWasDown));

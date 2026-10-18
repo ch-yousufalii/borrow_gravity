@@ -386,6 +386,9 @@ namespace BorrowGravity
             writer.Write((byte)((jump ? 1 : 0) | (power ? 2 : 0)));
             writer.Write(lJumpCount);
             writer.Write(lPowerCount);
+            // B's stick is relative to B's own camera on this phone: tell the host which way it faces
+            Vector3 view = b != null && b.ViewCamera != null ? b.ViewCamera.transform.forward : Vector3.zero;
+            writer.Write(view.x); writer.Write(view.y); writer.Write(view.z);
             SendTo(peer);
         }
 
@@ -417,6 +420,12 @@ namespace BorrowGravity
             rJumpCount = jc;
             rPowerCount = pc;
             gotInput = true;
+            if (r.BaseStream.Position + 12 <= r.BaseStream.Length)
+            {
+                var view = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                var b = Players.Get(1);
+                if (b != null) b.RemoteViewForward = view;
+            }
         }
 
         static bool lastJumpOut, lastPowerOut;
