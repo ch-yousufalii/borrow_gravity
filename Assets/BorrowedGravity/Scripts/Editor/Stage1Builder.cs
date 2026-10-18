@@ -248,64 +248,15 @@ namespace BorrowGravity.EditorTools
             var frag = Spawn("Platform_Metal_2x2", new Vector3(153.3f, 3.7f, 0f), new Vector3(0f, 0f, -4f), ctx.Group("5.8 Airlock"), null, "WalkwayFragment");
             Spawn("Platform_Metal_4x4", new Vector3(158.6f, 3.9f, 0f), Vector3.zero, ctx.Group("5.8 Airlock"), null, "BrokenWalkwayB");
             Spawn("Bridge_End_Broken", new Vector3(151.9f, 3.0f, 2.6f), new Vector3(20f, 10f, -25f), ctx.Group("5.8 Airlock"), Vector3.one * 0.8f, "BrokenEdgeDebris");
-            ctx.Piece("5.8", "Pressure_Plate", 0).transform.position = new Vector3(149.8f, 3.9f, -0.6f);
-            var plates = new PressurePlate[2];
-            for (int i = 0; i < 2; i++)
-            {
-                var plateMesh = Adopt(ctx, ctx.Piece("5.8", "Pressure_Plate", i), "5.8 Airlock", "Plate" + i);
-                NoColliders(plateMesh);
-                var tgo = TriggerBox(ctx.Group("5.8 Airlock"), "PlateTrigger" + i, plateMesh.transform.position + new Vector3(0f, 1f, 0f), new Vector3(1.9f, 2f, 2.2f));
-                var pp = tgo.AddComponent<PressurePlate>();
-                pp.section = 7;
-                pp.plateTop = plateMesh.transform;
-                pp.indicator = plateMesh.GetComponent<Renderer>();
-                pp.label = "Airlock Plate";
-                plates[i] = pp;
-            }
-            var latch = Spawn("Vault_LockBar", new Vector3(163f, 7.0f, -0.5f), Vector3.zero, ctx.Group("5.8 Airlock"), new Vector3(0.6f, 1f, 1f), "DoorLatch");
-            MakeDynamic(latch, 20f, RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ);
-            Gravity(latch, ZeroGravityResponse.Hover);
-            Nullify(latch, "Door Latch", 8f, false, 2.5f);
-            Respawn(latch, 7);
-            latch.AddComponent<SocketKey>().key = "latch";
-            foreach (float hx in new[] { 161.4f, 164.5f, 167f })
-                SolidBox(ctx.Group("5.8 Airlock"), "LatchHook", new Vector3(hx, 6.75f, -0.5f), new Vector3(0.8f, 0.3f, 1.2f), metal);
-            SolidBox(ctx.Group("5.8 Airlock"), "LatchBracket", new Vector3(162f, 8.0f, -0.5f), new Vector3(1f, 0.5f, 1.2f), metal);
-            SolidBox(ctx.Group("5.8 Airlock"), "LatchCeiling", new Vector3(164.3f, 10.85f, -0.5f), new Vector3(8f, 0.5f, 1.4f), metal);
-            Zone(ctx, "Latch Field", 7, new Vector3(164.3f, 8.5f, -0.5f), new Vector3(8f, 4f, 2f), GravityMode.Down,
-                new[] { GravityMode.Down, GravityMode.Up }, players: false,
-                arrows: new[] { new Vector3(160.6f, 9.4f, -1.6f), new Vector3(168f, 9.4f, -1.6f) });
-            var slot = TriggerBox(ctx.Group("5.8 Airlock"), "LatchSlot", new Vector3(165.6f, 9.9f, -0.5f), new Vector3(5f, 1.4f, 1.6f));
-            var latchSocket = slot.AddComponent<Socket>();
-            latchSocket.section = 7;
-            latchSocket.key = "latch";
-            latchSocket.lockObject = true;
-            latchSocket.acceptedMessage = "Latch raised!";
-            var gate = new GameObject("AirlockLogic").AddComponent<LogicGate>();
-            gate.transform.SetParent(ctx.Group("5.8 Airlock"), false);
-            gate.section = 7;
-            gate.inputs = new SignalSource[] { plates[0], plates[1], latchSocket };
-            gate.latch = true;
-            var doorL = Adopt(ctx, ctx.Piece("5.8", "Airlock_Door_L"), "5.8 Airlock");
-            var doorR = Adopt(ctx, ctx.Piece("5.8", "Airlock_Door_R"), "5.8 Airlock");
-            var door = gate.gameObject.AddComponent<Door>();
-            door.section = 7;
-            door.source = gate;
-            door.parts = new[] { doorL.transform, doorR.transform };
-            door.openOffsets = new[] { new Vector3(-3f, 0f, 0f), new Vector3(3f, 0f, 0f) };
-            door.openMessage = "The airlock is open — get inside together!";
-            var light = ctx.Piece("5.8", "Warning_Light");
-            var sl = light.AddComponent<SignalLight>();
-            sl.source = gate;
-            sl.renderers = new[] { light.GetComponent<Renderer>() };
-            sl.lightSource = PointLight(light.transform, light.transform.position + Vector3.up * 2.6f, Color.red, 6f, 3f);
+            // the end: jump the broken walkway and step into the finish beacon
+            var oldPlates = new[] { ctx.Piece("5.8", "Pressure_Plate", 0), ctx.Piece("5.8", "Pressure_Plate", 1) };
+            foreach (var plate in oldPlates) Remove(plate);
             foreach (float z in new[] { 4.6f, 8.6f })
                 Spawn("Station_Floor_4x4", new Vector3(163f, 3.9f, z), Vector3.zero, ctx.Group("5.8 Airlock"), new Vector3(2.5f, 1f, 1f), "AirlockFloor");
-            var goal = TriggerBox(ctx.Group("5.8 Airlock"), "Goal", new Vector3(163f, 5.5f, 7f), new Vector3(7f, 3f, 5f));
-            goal.AddComponent<GoalTrigger>();
+            Finish(ctx, "5.8 Airlock", new Vector3(159.6f, 3.9f, 0f), "Station Airlock");
             Hint(ctx, "5.8  Station Airlock",
-                "The airlock needs both pressure plates held at once — and the heavy latch slid out of its bracket (B) and lifted into its slot (A).",
-                new Vector3(150f, 5f, 0f), new Vector3(2f, 5f, 6f), 10f);
+                "The walkway to the station is broken — jump across, then step into the finish beacon to complete the stage!",
+                new Vector3(150f, 5f, 0f), new Vector3(2f, 5f, 6f), 8f);
 
             // ---------- lane walls ----------
             Wall(ctx, -2f, 178f, -2.2f);

@@ -269,49 +269,11 @@ namespace BorrowGravity.EditorTools
             var ship = ctx.Piece("7.8", "Spaceship");
             ship.transform.position = new Vector3(165f, 2.4f, 4.8f);
             NoColliders(ship);
-            var bayPad = Spawn("GravityZone_Pad", new Vector3(162f, -0.2f, 0.4f), Vector3.zero, ctx.Group("7.8 Ship"), null, "EngineBayPad");
-            NoColliders(bayPad);
-            var bayTrig = TriggerBox(ctx.Group("7.8 Ship"), "EngineBay", new Vector3(162f, 1.2f, 0.4f), new Vector3(2.2f, 2.4f, 2.2f));
-            var bay = bayTrig.AddComponent<EngineBay>();
-            bay.indicator = bayPad.GetComponent<Renderer>();
-            bay.slots = new Transform[2];
-            for (int i = 0; i < 2; i++)
-            {
-                var slot = new GameObject(i == 0 ? "SlotA" : "SlotB").transform;
-                slot.SetParent(bayTrig.transform, false);
-                slot.position = new Vector3(i == 0 ? 161.5f : 162.5f, 0.1f, 0.4f);
-                bay.slots[i] = slot;
-            }
-            var lockA = LockPad(ctx, new Vector3(159.9f, -0.2f, -1.7f), ctx.Piece("7.8", "Warning_Light", 0));
-            var lockB = LockPad(ctx, new Vector3(168.1f, -0.2f, -1.7f), ctx.Piece("7.8", "Warning_Light", 1));
-            var shipZone = Zone(ctx, "Ship Gravity Field", 7, new Vector3(164f, 2.5f, 0f), new Vector3(10f, 5f, 5f), GravityMode.Down,
-                new[] { GravityMode.Down, GravityMode.Zero }, players: false,
-                arrows: new[] { new Vector3(159.6f, 3.6f, -1.9f), new Vector3(168.4f, 3.6f, -1.9f) });
-            var stable = shipZone.gameObject.AddComponent<ZoneModeSignal>();
-            stable.zone = shipZone;
-            stable.modes = new[] { GravityMode.Down };
-            var final = new GameObject("RepairLogic").AddComponent<LogicGate>();
-            final.transform.SetParent(ctx.Group("7.8 Ship"), false);
-            final.section = 7;
-            final.inputs = new SignalSource[] { bay, lockA, lockB, stable };
-            var timerTrig = TriggerBox(ctx.Group("7.8 Ship"), "RepairCountdown", new Vector3(164f, 1.5f, 0f), new Vector3(10f, 3f, 5f));
-            var timer = timerTrig.AddComponent<CountdownRoom>();
-            timer.section = 7;
-            timer.duration = 120f;
-            timer.successSignal = final;
-            timer.label = "STATION COLLAPSE";
-            timer.startMessage = "The station is breaking apart! Install both engine halves, keep gravity DOWN and hit both locks!";
-            timer.successMessage = "Engine locked in — ignition!";
-            var glitch = shipZone.gameObject.AddComponent<ZoneGlitcher>();
-            glitch.zone = shipZone;
-            glitch.activeWhile = timer;
-            var goal = TriggerBox(ctx.Group("7.8 Ship"), "ShipGoal", new Vector3(164f, 1.5f, -0.5f), new Vector3(10f, 3f, 5f));
-            var gt = goal.AddComponent<GoalTrigger>();
-            gt.extraCondition = final;
-            gt.waitingForCondition = "Install both engine halves, keep gravity DOWN and stand on both locks!";
-            Hint(ctx, "7.8  Repair Under Pressure",
-                "Final repair! Each of you walk into the glowing bay to install your engine half. A: keep the ship's gravity field on DOWN. Then both stand on the lock pads!",
-                new Vector3(159.2f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 11f);
+            // the end: back at the ship — step into the finish beacon
+            Finish(ctx, "7.8 Ship", new Vector3(164f, -0.2f, -0.6f), "Ship");
+            Hint(ctx, "7.8  The Ship",
+                "You made it back to the ship with both engine halves! Step into the finish beacon to end the stage.",
+                new Vector3(159.2f, 1.5f, 0f), new Vector3(1.5f, 4f, 4f), 8f);
 
             // ---------- walls ----------
             Wall(ctx, -1f, 14f, -2.5f);
@@ -349,23 +311,6 @@ namespace BorrowGravity.EditorTools
             t.SetParent(ctx.Group("Checkpoints"), false);
             t.position = at;
             return t;
-        }
-
-        static PressurePlate LockPad(StageContext ctx, Vector3 at, GameObject light)
-        {
-            var visual = Spawn("Pressure_Plate", at, Vector3.zero, ctx.Group("7.8 Ship"), null, "LockPad");
-            NoColliders(visual);
-            var trig = TriggerBox(ctx.Group("7.8 Ship"), "LockPadTrigger", at + Vector3.up, new Vector3(1.8f, 2f, 1.8f));
-            var pp = trig.AddComponent<PressurePlate>();
-            pp.section = 7;
-            pp.plateTop = visual.transform;
-            pp.indicator = visual.GetComponent<Renderer>();
-            pp.label = "Engine Lock";
-            var sl = light.AddComponent<SignalLight>();
-            sl.source = pp;
-            sl.renderers = new[] { light.GetComponent<Renderer>() };
-            sl.lightSource = PointLight(light.transform, light.transform.position + Vector3.up * 2.6f, Color.red, 6f, 3f);
-            return pp;
         }
 
         static void DebrisFall(StageContext ctx, GameObject chunk, Vector3 landing, float period, float offset)
