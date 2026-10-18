@@ -23,6 +23,8 @@ namespace BorrowGravity
         [Tooltip("Where it sits relative to the player: x = sideways, y = along up, z = along facing.")]
         public Vector3 holdOffset = new Vector3(0f, 0.05f, 0.65f);
         public float carrySpeedFactor = 0.85f;
+        [Tooltip("Already in the owner's hands when the stage starts (both players carry their half all game).")]
+        public bool startHeld;
 
         public PartState State { get; private set; } = PartState.Waiting;
         public PlayerController Holder { get; private set; }
@@ -33,6 +35,13 @@ namespace BorrowGravity
         void OnDisable() => all.Remove(this);
 
         void Awake() => colliders = GetComponentsInChildren<Collider>(true);
+
+        void Start()
+        {
+            if (!startHeld || NetSession.IsClient) return;
+            var p = Players.Get(owner);
+            if (p != null) PickUp(p, true);
+        }
 
         void LateUpdate()
         {
@@ -66,12 +75,13 @@ namespace BorrowGravity
                 Quaternion.LookRotation(fwd, up));
         }
 
-        void PickUp(PlayerController p)
+        void PickUp(PlayerController p, bool silent = false)
         {
             Holder = p;
             State = PartState.Held;
             foreach (var c in colliders) if (c != null) c.enabled = false;
             Follow();
+            if (silent) return;
             Sfx.Play(SfxId.Plate, 0.8f, 1.1f);
             GameUI.Toast(p, "Got the " + displayName + "!");
             if (all.TrueForAll(e => e.State != PartState.Waiting))

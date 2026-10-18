@@ -10,11 +10,12 @@ namespace BorrowGravity
     /// </summary>
     public static class SettingsPanel
     {
-        const int Rows = 4;
+        const int Rows = 5;
         static int selected;
-        static readonly string[] Labels = { "BUTTON SIZE", "JOYSTICK SIZE", "JOYSTICK SENSITIVITY", "CAMERA SENSITIVITY" };
+        static readonly string[] Labels = { "MOVEMENT", "BUTTON SIZE", "JOYSTICK SIZE", "JOYSTICK SENSITIVITY", "CAMERA SENSITIVITY" };
         static readonly string[] Hints =
         {
+            "Floating joystick on the left half, or four arrow buttons.",
             "Size of the JUMP and POWER buttons.",
             "Size of the movement joystick.",
             "Higher = less drag needed for full speed.",
@@ -23,9 +24,9 @@ namespace BorrowGravity
 
         static float Get(int i) => i switch
         {
-            0 => ControlSettings.ButtonSize,
-            1 => ControlSettings.StickSize,
-            2 => ControlSettings.StickSensitivity,
+            1 => ControlSettings.ButtonSize,
+            2 => ControlSettings.StickSize,
+            3 => ControlSettings.StickSensitivity,
             _ => ControlSettings.LookSensitivity
         };
 
@@ -33,15 +34,17 @@ namespace BorrowGravity
         {
             switch (i)
             {
-                case 0: ControlSettings.ButtonSize += d * ControlSettings.SizeStep; break;
-                case 1: ControlSettings.StickSize += d * ControlSettings.SizeStep; break;
-                case 2: ControlSettings.StickSensitivity += d * ControlSettings.SensStep; break;
+                case 0: ControlSettings.Movement = ControlSettings.Movement == MoveStyle.Joystick ? MoveStyle.Arrows : MoveStyle.Joystick; break;
+                case 1: ControlSettings.ButtonSize += d * ControlSettings.SizeStep; break;
+                case 2: ControlSettings.StickSize += d * ControlSettings.SizeStep; break;
+                case 3: ControlSettings.StickSensitivity += d * ControlSettings.SensStep; break;
                 default: ControlSettings.LookSensitivity += d * ControlSettings.SensStep; break;
             }
             Sfx.Play(SfxId.Tick, 0.6f, 1.2f);
         }
 
-        static string Value(int i) => i <= 1 ? Mathf.RoundToInt(Get(i) * 100f) + "%" : Get(i).ToString("0.0") + "×";
+        static string Value(int i) => i == 0 ? (ControlSettings.Movement == MoveStyle.Joystick ? "JOYSTICK" : "ARROWS")
+                                    : i <= 2 ? Mathf.RoundToInt(Get(i) * 100f) + "%" : Get(i).ToString("0.0") + "×";
 
         /// <summary>Keyboard handling; returns true when the panel should close.</summary>
         public static bool HandleKeys()
@@ -58,7 +61,7 @@ namespace BorrowGravity
         public static bool Draw(float w, float h)
         {
             var e = Event.current;
-            float mw = Mathf.Min(w * 0.92f, 660f), mh = 560f;
+            float mw = Mathf.Min(w * 0.92f, 660f), mh = 620f;
             var r = new Rect((w - mw) * 0.5f, Mathf.Max(10f, (h - mh) * 0.5f), mw, mh);
             MenuStyle.Box(r, 1f, 1f);
             float x = r.x + 26f, inner = r.width - 52f, y = r.y + 26f;
@@ -68,7 +71,7 @@ namespace BorrowGravity
 
             for (int i = 0; i < Rows; i++)
             {
-                var row = new Rect(x, y, inner, 66f);
+                var row = new Rect(x, y, inner, 60f);
                 bool hover = row.Contains(e.mousePosition);
                 if (hover && e.type == EventType.MouseMove) selected = i;
                 if (hover && e.type == EventType.MouseDown) selected = i;
@@ -87,9 +90,9 @@ namespace BorrowGravity
                 }
                 var mid = new Rect(left.xMax + 10f, row.y + 9f, right.x - left.xMax - 20f, row.height - 18f);
                 MenuStyle.Text(new Rect(mid.x, mid.y, mid.width, 12f), Labels[i], UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperCenter);
-                MenuStyle.Text(new Rect(mid.x, mid.y + 14f, mid.width, 22f), Value(i), UIKit.Face.Heavy, 18, 1f, 0.08f, TextAnchor.UpperCenter);
-                MenuStyle.Text(new Rect(mid.x, mid.y + 36f, mid.width, 14f), Hints[i], UIKit.Face.Body, 11, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
-                y += 66f + 6f;
+                MenuStyle.Text(new Rect(mid.x, mid.y + 13f, mid.width, 22f), Value(i), UIKit.Face.Heavy, 17, 1f, 0.08f, TextAnchor.UpperCenter);
+                MenuStyle.Text(new Rect(mid.x, mid.y + 33f, mid.width, 14f), Hints[i], UIKit.Face.Body, 11, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+                y += 60f + 5f;
             }
 
             // live preview of the on-screen controls at the chosen sizes
@@ -98,13 +101,29 @@ namespace BorrowGravity
             float py = y + 70f;
             float sr = 44f * ControlSettings.StickSize;
             var stickC = new Vector2(x + 30f + sr, py);
-            MenuStyle.Box(new Rect(stickC.x - sr, stickC.y - sr, sr * 2f, sr * 2f), MenuStyle.W50, 1f, sr);
-            // inner ring: how far you drag for full speed
-            float full = sr * Mathf.Clamp01(ControlSettings.DeadZone + (1f - ControlSettings.DeadZone) / ControlSettings.StickSensitivity);
-            MenuStyle.Box(new Rect(stickC.x - full, stickC.y - full, full * 2f, full * 2f), MenuStyle.W25, 1f, full);
-            float knob = 16f * ControlSettings.StickSize;
-            MenuStyle.Box(new Rect(stickC.x - knob, stickC.y - knob, knob * 2f, knob * 2f), 0.85f, 0f, knob);
-            MenuStyle.Text(new Rect(stickC.x + sr + 12f, py - 9f, 220f, 18f), "full speed at the inner ring", UIKit.Face.Body, 11, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+            if (ControlSettings.Movement == MoveStyle.Arrows)
+            {
+                float ar = sr * 0.42f;
+                var dirs = new[] { new Vector2(0f, -1f), new Vector2(0f, 1f), new Vector2(-1f, 0f), new Vector2(1f, 0f) };
+                for (int i = 0; i < 4; i++)
+                {
+                    var c = stickC + dirs[i] * sr * 0.8f;
+                    var rr = new Rect(c.x - ar, c.y - ar, ar * 2f, ar * 2f);
+                    MenuStyle.Box(rr, MenuStyle.W50, 1f, ar);
+                    VirtualControls.Chevron(c, i, ar * 0.55f, MenuStyle.W80);
+                }
+                MenuStyle.Text(new Rect(stickC.x + sr + 12f, py - 9f, 220f, 18f), "arrow buttons", UIKit.Face.Body, 11, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+            }
+            else
+            {
+                MenuStyle.Box(new Rect(stickC.x - sr, stickC.y - sr, sr * 2f, sr * 2f), MenuStyle.W50, 1f, sr);
+                // inner ring: how far you drag for full speed
+                float full = sr * Mathf.Clamp01(ControlSettings.DeadZone + (1f - ControlSettings.DeadZone) / ControlSettings.StickSensitivity);
+                MenuStyle.Box(new Rect(stickC.x - full, stickC.y - full, full * 2f, full * 2f), MenuStyle.W25, 1f, full);
+                float knob = 16f * ControlSettings.StickSize;
+                MenuStyle.Box(new Rect(stickC.x - knob, stickC.y - knob, knob * 2f, knob * 2f), 0.85f, 0f, knob);
+                MenuStyle.Text(new Rect(stickC.x + sr + 12f, py - 9f, 220f, 18f), "full speed at the inner ring", UIKit.Face.Body, 11, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+            }
             float br = 30f * ControlSettings.ButtonSize;
             var jumpC = new Vector2(r.xMax - 26f - br, py + 8f);
             var powC = new Vector2(jumpC.x - br * 2f - 14f, py - 18f);

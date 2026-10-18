@@ -6,16 +6,19 @@ namespace BorrowGravity
     /// Player-adjustable control settings, saved on this device: on-screen button size, joystick size, joystick
     /// sensitivity (how far you drag for full speed) and camera-look sensitivity (finger drag / mouse).
     /// </summary>
+    public enum MoveStyle { Joystick, Arrows }
+
     public static class ControlSettings
     {
         public const float MinSize = 0.6f, MaxSize = 1.6f, SizeStep = 0.1f;
         public const float MinSens = 0.5f, MaxSens = 2.5f, SensStep = 0.1f;
         public const float DeadZone = 0.1f;
 
-        const string KeyButton = "bg_btn_size", KeyStick = "bg_stick_size", KeyStickSens = "bg_stick_sens", KeyLook = "bg_look_sens";
+        const string KeyButton = "bg_btn_size", KeyStick = "bg_stick_size", KeyStickSens = "bg_stick_sens", KeyLook = "bg_look_sens", KeyStyle = "bg_move_style";
 
         static bool loaded;
         static float buttonSize = 1f, stickSize = 1f, stickSensitivity = 1f, lookSensitivity = 1f;
+        static MoveStyle moveStyle = MoveStyle.Joystick;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => loaded = false;
@@ -28,7 +31,11 @@ namespace BorrowGravity
             stickSize = Mathf.Clamp(PlayerPrefs.GetFloat(KeyStick, 1f), MinSize, MaxSize);
             stickSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyStickSens, 1f), MinSens, MaxSens);
             lookSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyLook, 1f), MinSens, MaxSens);
+            moveStyle = PlayerPrefs.GetInt(KeyStyle, 0) == 1 ? MoveStyle.Arrows : MoveStyle.Joystick;
         }
+
+        /// <summary>Touch movement: floating joystick (left half of the screen) or four arrow buttons.</summary>
+        public static MoveStyle Movement { get { Load(); return moveStyle; } set { Load(); moveStyle = value; Save(); } }
 
         /// <summary>Scale of the JUMP / POWER buttons (1 = default).</summary>
         public static float ButtonSize { get { Load(); return buttonSize; } set { Load(); buttonSize = Snap(value, MinSize, MaxSize); Save(); } }
@@ -47,6 +54,7 @@ namespace BorrowGravity
             PlayerPrefs.SetFloat(KeyStick, stickSize);
             PlayerPrefs.SetFloat(KeyStickSens, stickSensitivity);
             PlayerPrefs.SetFloat(KeyLook, lookSensitivity);
+            PlayerPrefs.SetInt(KeyStyle, moveStyle == MoveStyle.Arrows ? 1 : 0);
             PlayerPrefs.Save();
         }
 
@@ -54,6 +62,7 @@ namespace BorrowGravity
         {
             Load();
             buttonSize = stickSize = stickSensitivity = lookSensitivity = 1f;
+            moveStyle = MoveStyle.Joystick;
             Save();
         }
 

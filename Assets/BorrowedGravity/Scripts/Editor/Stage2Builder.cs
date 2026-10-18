@@ -175,7 +175,7 @@ namespace BorrowGravity.EditorTools
             conv.loadTemplates = templates.ToArray();
             conv.start = new Vector3(47.5f, Upper, 1.3f);
             conv.end = new Vector3(36.4f, Upper, 1.3f);
-            conv.speed = 3.4f;
+            conv.speed = 2.6f;
             conv.spawnInterval = 4.2f;
             Hint(ctx, "6.3  Magnetic Cargo Lane",
                 "Cargo slides down the magnetic lane — step into the side bays (toward the camera) to let it pass.\nA jammed container blocks the exit: A zeroes its gravity, B steers it into the back bay.",
@@ -207,7 +207,7 @@ namespace BorrowGravity.EditorTools
             var roomTrig = TriggerBox(ctx.Group("6.4 Airlock"), "CountdownTrigger", new Vector3(62.4f, 7f, 0f), new Vector3(7f, 4f, 7.4f));
             var room = roomTrig.AddComponent<CountdownRoom>();
             room.section = 3;
-            room.duration = 50f;
+            room.duration = 80f;
             room.successSignal = success;
             room.roomZone = roomZone;
             var entry = SlidingDoor(ctx, "6.4 Airlock", 58.4f, room, invert: true, latch: false);
@@ -307,7 +307,7 @@ namespace BorrowGravity.EditorTools
             storm.spawnMin = new Vector3(126f, 5.7f, -1.3f);
             storm.spawnMax = new Vector3(126.6f, 7.3f, 1.3f);
             storm.velocity = new Vector3(-15f, 0f, 0f);
-            storm.burstCount = 4;
+            storm.burstCount = 3;
             storm.hallStartX = 104f;
             storm.hallEndX = 125f;
             var wl0 = ctx.Piece("6.7", "Warning_Light", 0);

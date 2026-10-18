@@ -156,6 +156,21 @@ namespace BorrowGravity
             GUI.matrix = keep;
         }
 
+        /// <summary>A ring of small dots, lit clockwise from the top for 'fraction' (cooldowns, timers) — white only.</summary>
+        public static void Arc(Vector2 center, float radius, float fraction, float alpha = 1f, int segments = 44, float dot = 3.4f)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            int lit = Mathf.RoundToInt(Mathf.Clamp01(fraction) * segments);
+            for (int i = 0; i < segments; i++)
+            {
+                float a = (i / (float)segments) * Mathf.PI * 2f;
+                var c = center + new Vector2(Mathf.Sin(a), -Mathf.Cos(a)) * radius;
+                float d = i < lit ? dot : dot * 0.6f;
+                GUI.DrawTexture(new Rect(c.x - d * 0.5f, c.y - d * 0.5f, d, d), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                    White(i < lit ? alpha : alpha * 0.25f), 0f, d * 0.5f);
+            }
+        }
+
         /// <summary>A keycap: rounded outline with the key's label (the &lt;kbd&gt; look).</summary>
         public static float Key(float x, float centerY, string label)
         {

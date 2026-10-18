@@ -22,6 +22,17 @@ namespace BorrowGravity
         public bool isFinalStage;
         public float holdToResetSeconds = 1f;
         public bool playAmbience = true;
+        [Tooltip("Seconds the stage-complete card shows before moving on by itself.")]
+        public float autoContinueAfter = 4f;
+        [Tooltip("Seconds the stage instructions card shows before the stage starts by itself.")]
+        public float autoStartAfter = 8f;
+        float introShownAt;
+
+        /// <summary>Seconds until the instructions card starts the stage by itself.</summary>
+        public float IntroLeft => State == StageState.Intro ? Mathf.Max(0f, autoStartAfter - (Time.unscaledTime - introShownAt)) : 0f;
+
+        /// <summary>Seconds until the complete card moves on by itself (for the HUD).</summary>
+        public float AutoContinueLeft => State == StageState.Complete ? Mathf.Max(0f, autoContinueAfter - (Time.unscaledTime - completeTime)) : 0f;
 
         public StageState State { get; private set; } = StageState.Intro;
         public float ResetHold { get; private set; }
@@ -50,6 +61,7 @@ namespace BorrowGravity
 
         void SetState(StageState s)
         {
+            if (s == StageState.Intro) introShownAt = Time.unscaledTime;
             State = s;
             bool playing = s == StageState.Playing;
             if (players != null) foreach (var p in players) if (p != null) p.InputEnabled = playing;
@@ -62,7 +74,8 @@ namespace BorrowGravity
             switch (State)
             {
                 case StageState.Intro:
-                    if (AnyConfirm() || Tapped()) { SetState(StageState.Playing); Sfx.Play(SfxId.Checkpoint, 0.5f); }
+                    // the instructions card starts the stage by itself after a few seconds (tap / Space to go sooner)
+                    if (AnyConfirm() || Tapped() || Time.unscaledTime - introShownAt > autoStartAfter) { SetState(StageState.Playing); Sfx.Play(SfxId.Checkpoint, 0.5f); }
                     break;
                 case StageState.Playing:
                     StageTime += Time.deltaTime;
@@ -89,7 +102,8 @@ namespace BorrowGravity
                     if (AnyConfirm()) ChoosePauseItem(PauseSelection);
                     break;
                 case StageState.Complete:
-                    if (Time.unscaledTime - completeTime > 1.5f && (AnyConfirm() || Tapped())) Continue();
+                    // straight on to the next level (or the ending) after a short moment; tap / Space to go sooner
+                    if (Time.unscaledTime - completeTime > autoContinueAfter || (Time.unscaledTime - completeTime > 1.5f && (AnyConfirm() || Tapped()))) Continue();
                     break;
             }
         }
@@ -140,6 +154,8 @@ namespace BorrowGravity
         public void ApplyRemote(StageState state, float stageTime, int deaths, float resetHold)
         {
             if (state != State && state == StageState.Paused) PauseSelection = 0;
+            if (state != State && state == StageState.Intro) introShownAt = Time.unscaledTime;
+            if (state != State && state == StageState.Complete) completeTime = Time.unscaledTime; // for the next-level countdown
             State = state;
             StageTime = stageTime;
             Deaths = deaths;

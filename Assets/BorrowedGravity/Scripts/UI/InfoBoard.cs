@@ -17,7 +17,11 @@ namespace BorrowGravity
         public float lineGap = 0.12f;
         [Tooltip("Extra height above where the builder placed it (keeps the text clear of props).")]
         public float lift = 1f;
-        public float showWithin = 22f;
+        public float showWithin = 30f;
+        [Tooltip("Bigger text overall (1 = the builder's size).")]
+        public float textScale = 1.35f;
+        [Tooltip("Font atlas resolution multiplier: higher = sharper text from a distance.")]
+        public float sharpness = 2.2f;
         [Tooltip("Hidden when the camera is closer than this (so a board never fills the screen).")]
         public float hideCloserThan = 4f;
 
@@ -28,8 +32,13 @@ namespace BorrowGravity
         {
             renderers = GetComponentsInChildren<Renderer>(true);
             transform.position += Vector3.up * lift;
-            if (title != null) title.characterSize = textSize;
-            if (body != null) body.characterSize = textSize;
+            // render the glyphs at a higher font size and shrink them back: same layout, much crisper text
+            foreach (var tm in new[] { title, body })
+            {
+                if (tm == null) continue;
+                tm.fontSize = Mathf.RoundToInt(tm.fontSize * sharpness);
+                tm.characterSize = textSize * textScale / sharpness;
+            }
             Layout();
         }
 

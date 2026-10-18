@@ -32,7 +32,14 @@ namespace BorrowGravity
             ("Host a Room", "Create a room · share the 4-digit code."),
             ("Join a Room", "Enter your partner's room code."),
         };
-        static readonly string[] Keypad = { "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "<" };
+        // digits + letters (internet room codes look like K7Q2XD), '.' for IPs, '<' = delete
+        static readonly string[] Keypad =
+        {
+            "1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
+            "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
+            "U", "V", "W", "X", "Y", "Z", ".", "<"
+        };
 
         int row = (int)Row.Start;
         int stage;
@@ -121,7 +128,7 @@ namespace BorrowGravity
             switch (r)
             {
                 case Row.Start:
-                    if (mode == 0) NetSession.StartHost();
+                    if (mode == 0) NetSession.HostRoom();
                     else { joinEntry = true; NetSession.LastError = ""; }
                     break;
                 case Row.Controls: overlay = Overlay.Controls; break;
@@ -450,7 +457,7 @@ namespace BorrowGravity
 
         // ---------- online room ----------
 
-        bool RoomPanelOpen => overlay != Overlay.Launch && (joinEntry || NetSession.Online);
+        bool RoomPanelOpen => overlay != Overlay.Launch && (joinEntry || NetSession.Online || NetSession.Busy);
 
         void LeaveRoom()
         {
@@ -480,6 +487,7 @@ namespace BorrowGravity
                 Key[] digits = { Key.Digit0, Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
                 Key[] pad = { Key.Numpad0, Key.Numpad1, Key.Numpad2, Key.Numpad3, Key.Numpad4, Key.Numpad5, Key.Numpad6, Key.Numpad7, Key.Numpad8, Key.Numpad9 };
                 for (int i = 0; i < 10; i++) if (PlayerKeys.Pressed(digits[i]) || PlayerKeys.Pressed(pad[i])) TypeKey(i.ToString());
+                for (Key k = Key.A; k <= Key.Z; k++) if (PlayerKeys.Pressed(k)) TypeKey(((char)('A' + (k - Key.A))).ToString());
                 if (PlayerKeys.Pressed(Key.Period) || PlayerKeys.Pressed(Key.NumpadPeriod)) TypeKey(".");
                 if (PlayerKeys.Pressed(Key.Backspace)) TypeKey("<");
                 if (PlayerKeys.Pressed(Key.Enter) || PlayerKeys.Pressed(Key.NumpadEnter)) Connect();
@@ -495,22 +503,33 @@ namespace BorrowGravity
                 var r = Modal(w, h, Mathf.Min(w * 0.92f, 520f), 560f);
                 float x = r.x + 26f, inner = r.width - 52f, cx = r.center.x;
                 MenuStyle.Text(new Rect(x, r.y + 26f, inner, 22f), "JOIN A ROOM", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
-                MenuStyle.Text(new Rect(x, r.y + 60f, inner, 18f), "Type the room code shown on your partner's screen.", UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperLeft);
+                MenuStyle.Text(new Rect(x, r.y + 60f, inner, 18f), "Type the room code shown on your partner's screen (any network).", UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperLeft);
                 var field = new Rect(cx - 150f, r.y + 92f, 300f, 60f);
                 MenuStyle.Box(field, MenuStyle.W50, 1f);
                 MenuStyle.Brackets(field);
                 MenuStyle.Text(field, joinCode.Length > 0 ? joinCode : "····", UIKit.Face.Display, 30, joinCode.Length > 0 ? 1f : MenuStyle.W25, 0.25f);
+                const int cols = 10;
+                float kw = (inner - (cols - 1) * 6f) / cols;
                 for (int i = 0; i < Keypad.Length; i++)
                 {
-                    var k = new Rect(cx - 150f + (i % 3) * 104f, r.y + 170f + (i / 3) * 58f, 92f, 48f);
+                    var k = new Rect(x + (i % cols) * (kw + 6f), r.y + 170f + (i / cols) * 52f, Keypad[i] == "<" ? kw * 2f + 6f : kw, 44f);
                     if (MenuStyle.Button(k, Keypad[i] == "<" ? "Del" : Keypad[i])) TypeKey(Keypad[i]);
                 }
-                MenuStyle.Paragraph(new Rect(x, r.y + 410f, inner, 40f),
+                MenuStyle.Paragraph(new Rect(x, r.y + 390f, inner, 60f),
                     (string.IsNullOrEmpty(NetSession.LastError) ? "" : NetSession.LastError + "\n") +
-                    "Same Wi-Fi or hotspot. You can also type the host's IP address.", UIKit.Face.Body, 12, MenuStyle.W50, TextAnchor.UpperCenter);
+                    "Letters + digits = internet room (works on any network). 4 digits or an IP = same Wi-Fi room.", UIKit.Face.Body, 12, MenuStyle.W50, TextAnchor.UpperCenter);
                 var connect = new Rect(r.xMax - 26f - 120f, r.yMax - 26f - 34f, 120f, 34f);
                 if (MenuStyle.Button(new Rect(connect.x - 10f - 96f, connect.y, 96f, 34f), "Back")) { joinEntry = false; Sfx.Play(SfxId.Plate, 0.5f); }
                 if (MenuStyle.Button(connect, "Connect", true)) Connect();
+                return;
+            }
+
+            if (NetSession.Busy && !NetSession.Online)
+            {
+                var br = Modal(w, h, Mathf.Min(w * 0.92f, 520f), 170f);
+                float bp = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
+                MenuStyle.Text(new Rect(br.x, br.y + 60f, br.width, 24f), "CREATING ROOM…", UIKit.Face.Heavy, 18, 0.45f + 0.5f * bp, 0.15f, TextAnchor.UpperCenter);
+                MenuStyle.Text(new Rect(br.x, br.y + 96f, br.width, 16f), "Connecting to Unity Relay", UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
                 return;
             }
 
@@ -521,8 +540,9 @@ namespace BorrowGravity
                 MenuStyle.Text(new Rect(x, r.y + 26f, inner, 22f), "YOUR ROOM", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
                 MenuStyle.Text(new Rect(x, r.y + 70f, inner, 12f), "ROOM CODE", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperCenter);
                 MenuStyle.Text(new Rect(x, r.y + 88f, inner, 80f), NetSession.RoomCode, UIKit.Face.Display, 72, 1f, 0.12f, TextAnchor.UpperCenter);
-                if (!string.IsNullOrEmpty(NetSession.LocalAddress))
-                    MenuStyle.Text(new Rect(x, r.y + 184f, inner, 18f), "or IP  " + NetSession.LocalAddress, UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+                string where = NetSession.ViaRelay ? "Internet room · works on any network"
+                             : "Same Wi-Fi room" + (string.IsNullOrEmpty(NetSession.LocalAddress) ? "" : " · or IP " + NetSession.LocalAddress);
+                MenuStyle.Text(new Rect(x, r.y + 184f, inner, 18f), where, UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
                 MenuStyle.Line(x, r.y + 218f, inner, MenuStyle.W25);
                 bool joined = NetSession.Connected;
                 float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
