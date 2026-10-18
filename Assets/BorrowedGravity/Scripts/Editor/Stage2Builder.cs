@@ -138,7 +138,8 @@ namespace BorrowGravity.EditorTools
                 new Vector3(20.8f, 3.5f, 0f), new Vector3(1.4f, 4f, 7f), 11f);
 
             // ---------- 6.3 Magnetic Cargo Lane ----------
-            Checkpoint(ctx, ctx.Piece("6.3", "Checkpoint_Beacon"), new Vector3(35.2f, Upper, -2.6f), 2, "Cargo Lane", new Vector3(3f, 4f, 7f), spawnX: 35.2f);
+            var cargoCp = Checkpoint(ctx, ctx.Piece("6.3", "Checkpoint_Beacon"), new Vector3(35.2f, Upper, -2.6f), 2, "Cargo Lane", new Vector3(3f, 4f, 7f), spawnX: 35.2f);
+            cargoCp.transform.position = new Vector3(32.2f, Upper, -2.6f); // trigger a little earlier (Feeza's correction)
             foreach (var c in ctx.Pieces("6.3", "Crate_Heavy_2m")) Remove(c);
             foreach (var c in ctx.Pieces("6.3", "Cargo_Container")) Remove(c);
             foreach (var c in ctx.Pieces("6.3", "Crate_1m")) Remove(c);

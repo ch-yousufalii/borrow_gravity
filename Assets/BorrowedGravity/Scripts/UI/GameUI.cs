@@ -124,7 +124,7 @@ namespace BorrowGravity
             {
                 if (capturing) return; // nothing over the game while its still is taken
                 if (frosted != null) GUI.DrawTexture(new Rect(0, 0, w, h), frosted, ScaleMode.StretchToFill);
-                UIKit.Fill(new Rect(0, 0, w, h), new Color(0.02f, 0.03f, 0.07f, frosted != null ? 0.42f : 0.65f));
+                UIKit.Fill(new Rect(0, 0, w, h), new Color(0.02f, 0.03f, 0.07f, frosted != null ? 0.58f : 0.72f));
                 if (sm.State == StageState.Intro) DrawIntro(w, h, sm);
                 else if (sm.State == StageState.Paused) DrawPause(w, h, sm);
                 else DrawComplete(w, h, sm);
@@ -146,7 +146,6 @@ namespace BorrowGravity
             DrawWarning(w);
             DrawCheckpoint(w);
             DrawEngine(w, h);
-            DrawParts(w);
             DrawMessages(w, h);
             DrawHelp(w, h, sm);
         }

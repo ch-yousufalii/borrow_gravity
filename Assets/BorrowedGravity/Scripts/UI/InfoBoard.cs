@@ -34,6 +34,7 @@ namespace BorrowGravity
         {
             renderers = GetComponentsInChildren<Renderer>(true);
             transform.position += Vector3.up * lift;
+            if (GameFlow.Solo && body != null) body.text = ForSolo(body.text);
             // render the glyphs at a higher font size and shrink them back: same layout, much crisper text
             foreach (var tm in new[] { title, body })
             {
@@ -87,6 +88,22 @@ namespace BorrowGravity
             // stay upright, turn to face the camera (text reads from the camera's side)
             Vector3 flat = Vector3.ProjectOnPlane(to, Vector3.up);
             if (flat.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(flat, Vector3.up);
+        }
+
+        // solo: one astronaut does both jobs — E bends gravity (A's power), Q freezes (B's)
+        static readonly (string from, string to)[] SoloWords =
+        {
+            ("(or B steers it — hold Right Shift)", "(or hold Q to steer it)"), ("A: ", "[E] "), ("B: ", "[Q] "),
+            ("A zeroes", "[E] zero"), ("A restores", "[E] restore"), ("A drops", "[E] drop"),
+            ("B steers", "[Q] steer"), ("B freezes", "[Q] freeze"), ("A carries the orange one, B the cyan one", "you carry one"),
+            ("Right Shift", "Q"), ("BOTH stand", "stand"), ("you're both", "you're"), ("Run across together", "Run across"),
+            ("then run together", "then run"), ("move together", "move on"),
+        };
+
+        static string ForSolo(string text)
+        {
+            foreach (var (from, to) in SoloWords) text = text.Replace(from, to);
+            return text;
         }
 
         /// <summary>One of the players on this device (its own online, A/B on a shared screen) is close.</summary>
