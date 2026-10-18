@@ -17,6 +17,8 @@ namespace BorrowGravity
         public float orbitSpeed = 4f;
         public float orbitRadius = 34f;
         public float orbitHeight = 10f;
+        [Tooltip("How soft the orbiting scene behind the menu is (0 = sharp, 1 = very blurred).")]
+        [Range(0f, 1f)] public float backgroundBlur = 0.5f;
 
         enum Row { Stage, Mode, Cutscene, Start, Controls, Settings, Quit }
         static readonly Row[] Rows = { Row.Stage, Row.Mode, Row.Cutscene, Row.Start, Row.Controls, Row.Settings, Row.Quit };
@@ -68,10 +70,77 @@ namespace BorrowGravity
             else DevCommandLine();
             for (int i = 0; i < changedAt.Length; i++) changedAt[i] = -10f;
             Sfx.SetLoop(LoopId.Ambience, true, 0.35f);
+            Sfx.SetLoop(LoopId.Music, true, 0.8f);
+        }
+
+        // ---------- soft background: the orbit camera renders small, it's blurred and drawn behind the menu ----------
+
+        Camera sceneCam;
+        RenderTexture sceneTex, softTex;
+
+        void SetupBlur()
+        {
+            if (backgroundBlur <= 0f || sceneCam != null) return;
+            sceneCam = Camera.main;
+            if (sceneCam == null) return;
+            int w = Mathf.Max(64, Screen.width / 2), h = Mathf.Max(64, Screen.height / 2);
+            sceneTex = new RenderTexture(w, h, 24) { name = "MenuScene" };
+            sceneCam.targetTexture = sceneTex;
+            // something still has to clear the screen behind the GUI
+            var clear = new GameObject("MenuScreenClear").AddComponent<Camera>();
+            clear.cullingMask = 0;
+            clear.clearFlags = CameraClearFlags.SolidColor;
+            clear.backgroundColor = Color.black;
+            clear.depth = sceneCam.depth - 1f;
+        }
+
+        void BlurScene()
+        {
+            if (sceneTex == null) return;
+            // each bilinear halving averages 2x2 pixels: more halvings = softer
+            int steps = Mathf.Clamp(Mathf.RoundToInt(backgroundBlur * 4f), 1, 4);
+            int w = sceneTex.width, h = sceneTex.height;
+            var cur = sceneTex;
+            var temps = new System.Collections.Generic.List<RenderTexture>();
+            for (int i = 0; i < steps; i++)
+            {
+                w = Mathf.Max(8, w / 2); h = Mathf.Max(8, h / 2);
+                var next = RenderTexture.GetTemporary(w, h, 0);
+                Graphics.Blit(cur, next);
+                temps.Add(next);
+                cur = next;
+            }
+            for (int i = 0; i < steps - 1; i++)
+            {
+                w *= 2; h *= 2;
+                var next = RenderTexture.GetTemporary(w, h, 0);
+                Graphics.Blit(cur, next);
+                temps.Add(next);
+                cur = next;
+            }
+            if (softTex == null || softTex.width != w || softTex.height != h)
+            {
+                if (softTex != null) { softTex.Release(); Destroy(softTex); }
+                softTex = new RenderTexture(w, h, 0) { filterMode = FilterMode.Bilinear, name = "MenuSoft" };
+            }
+            Graphics.Blit(cur, softTex);
+            foreach (var t in temps) RenderTexture.ReleaseTemporary(t);
+            RenderTexture.active = null;
+        }
+
+        // last frame's render, blurred before this frame's GUI (blitting inside OnGUI would steal its target)
+        void LateUpdate() => BlurScene();
+
+        void OnDestroy()
+        {
+            if (sceneCam != null) sceneCam.targetTexture = null;
+            if (sceneTex != null) { sceneTex.Release(); Destroy(sceneTex); }
+            if (softTex != null) { softTex.Release(); Destroy(softTex); }
         }
 
         void Update()
         {
+            SetupBlur();
             var cam = Camera.main;
             if (cam != null && orbitTarget != null)
             {
@@ -168,6 +237,11 @@ namespace BorrowGravity
         {
             UIKit.Begin();
             float w = UIKit.Width, h = UIKit.Height;
+            if (softTex != null && Event.current.type == EventType.Repaint)
+            {
+                GUI.DrawTexture(new Rect(0, 0, w, h), softTex, ScaleMode.StretchToFill);
+                UIKit.Fill(new Rect(0, 0, w, h), new Color(0.02f, 0.03f, 0.07f, 0.15f));
+            }
             // fully transparent: white lines and text straight over the orbiting scene (text has a soft shadow)
 
             bool menuLive = overlay == Overlay.None && !RoomPanelOpen;

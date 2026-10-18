@@ -94,6 +94,7 @@ namespace BorrowGravity
                 if (seat.target != null && seat.player >= GameFlow.PlayerCount) { hidden.Add(seat.target); seat.target.SetActive(false); }
             // solo: B isn't there, so B's lines come over the radio
             if (GameFlow.Solo) foreach (var l in lines) if (l.speaker == "B") l.speaker = "COMMS";
+            Sfx.StopMusic();
             Sfx.SetLoop(LoopId.Ambience, true, 0.4f);
             Sfx.SetLoop(LoopId.Drone, true, 0.3f); // low cinematic bed under the whole cutscene
             lines.Sort((a, b) => a.time.CompareTo(b.time));

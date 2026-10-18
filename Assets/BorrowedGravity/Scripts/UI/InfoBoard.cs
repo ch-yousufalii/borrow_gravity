@@ -4,7 +4,8 @@ namespace BorrowGravity
 {
     /// <summary>
     /// An instruction board floating in the level next to a puzzle: section title + what to do. It sizes its panel to
-    /// the text, turns (upright) to face this device's camera, and fades out when the player is far away.
+    /// the text, turns (upright) to face this device's camera, and only shows while a player is close by (so boards
+    /// never pile up on screen or over the HUD).
     /// Built by the stage builders from the same text as the HUD hints.
     /// </summary>
     public class InfoBoard : MonoBehaviour
@@ -17,7 +18,8 @@ namespace BorrowGravity
         public float lineGap = 0.12f;
         [Tooltip("Extra height above where the builder placed it (keeps the text clear of props).")]
         public float lift = 1f;
-        public float showWithin = 30f;
+        [Tooltip("Shown only while one of this device's players is within this distance.")]
+        public float nearPlayer = 9f;
         [Tooltip("Bigger text overall (1 = the builder's size).")]
         public float textScale = 1.35f;
         [Tooltip("Font atlas resolution multiplier: higher = sharper text from a distance.")]
@@ -75,7 +77,7 @@ namespace BorrowGravity
             float d2 = to.sqrMagnitude;
             var sm = StageManager.Instance;
             bool playing = sm == null || !sm.isActiveAndEnabled || sm.State == StageState.Playing; // not behind the intro card / pause
-            bool near = playing && d2 < showWithin * showWithin && d2 > hideCloserThan * hideCloserThan;
+            bool near = playing && PlayerNearby() && d2 > hideCloserThan * hideCloserThan;
             if (near != shown)
             {
                 shown = near;
@@ -85,6 +87,18 @@ namespace BorrowGravity
             // stay upright, turn to face the camera (text reads from the camera's side)
             Vector3 flat = Vector3.ProjectOnPlane(to, Vector3.up);
             if (flat.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(flat, Vector3.up);
+        }
+
+        /// <summary>One of the players on this device (its own online, A/B on a shared screen) is close.</summary>
+        bool PlayerNearby()
+        {
+            float r2 = nearPlayer * nearPlayer;
+            foreach (var p in Players.All)
+            {
+                if (p == null || (NetSession.Online && p.playerIndex != NetSession.LocalPlayer)) continue;
+                if ((p.transform.position - transform.position).sqrMagnitude < r2) return true;
+            }
+            return false;
         }
     }
 }
