@@ -7,7 +7,8 @@ namespace BorrowGravity
     /// Title screen in the final menu design (borrowed-gravity-menu.html): white-only outlines over the orbiting scene.
     /// Brand on the left; on the right a "NEW GAME" pill, selector rows (stage with difficulty pips, mode, opening
     /// cutscene toggle), START, Controls / Quit and a key-hint footer. Overlays: Controls, Quit confirm, Launching.
-    /// Mode = host or join a room (every player on their own device, full screen). Keyboard, mouse or touch.
+    /// Mode = play solo (both powers), host a room for 2-4 players, or join one (every player on their own device,
+    /// full screen). Keyboard, mouse or touch.
     /// </summary>
     public class MainMenu : MonoBehaviour
     {
@@ -27,11 +28,18 @@ namespace BorrowGravity
             ("2 · Upside-Down Station", "Flip the station, find the engine.", 2),
             ("3 · Collapsing Return", "Carry the engine home — fast.", 3),
         };
+        // 0 solo, 1-3 host a room for 2-4 players, 4 join
         static readonly (string name, string hint)[] Modes =
         {
-            ("Host a Room", "Create a room · share the 4-digit code."),
-            ("Join a Room", "Enter your partner's room code."),
+            ("Solo", "Play alone · E bends gravity, Q freezes."),
+            ("Host · 2 Players", "Create a room for 2 · share the code."),
+            ("Host · 3 Players", "Create a room for 3 · share the code."),
+            ("Host · 4 Players", "Create a room for 4 · share the code."),
+            ("Join a Room", "Enter the host's room code."),
         };
+        const int JoinMode = 4;
+        bool Solo => mode == 0;
+        bool Joining => mode == JoinMode;
         // digits + letters (internet room codes look like K7Q2XD), '.' for IPs, '<' = delete
         static readonly string[] Keypad =
         {
@@ -43,7 +51,7 @@ namespace BorrowGravity
 
         int row = (int)Row.Start;
         int stage;
-        int mode; // 0 host, 1 join
+        int mode = 1;
         bool cutscene = true;
         Overlay overlay;
         bool joinEntry;
@@ -56,7 +64,7 @@ namespace BorrowGravity
         void Start()
         {
             Time.timeScale = 1f;
-            if (NetSession.Online) mode = NetSession.IsHost ? 0 : 1;
+            if (NetSession.Online) mode = NetSession.IsHost ? Mathf.Clamp(GameFlow.PlayerCount - 1, 1, 3) : JoinMode;
             else DevCommandLine();
             for (int i = 0; i < changedAt.Length; i++) changedAt[i] = -10f;
             Sfx.SetLoop(LoopId.Ambience, true, 0.35f);
@@ -128,8 +136,10 @@ namespace BorrowGravity
             switch (r)
             {
                 case Row.Start:
-                    if (mode == 0) NetSession.HostRoom();
-                    else { joinEntry = true; NetSession.LastError = ""; }
+                    NetSession.LastError = "";
+                    if (Solo) { GameFlow.PlayerCount = 1; StartGame(); }
+                    else if (Joining) joinEntry = true;
+                    else { GameFlow.PlayerCount = mode + 1; NetSession.HostRoom(); }
                     break;
                 case Row.Controls: overlay = Overlay.Controls; break;
                 case Row.Settings: overlay = Overlay.Settings; break;
@@ -186,7 +196,7 @@ namespace BorrowGravity
             float wa = MenuStyle.Measure(a, UIKit.Face.Body, size, 0.02f);
             MenuStyle.Text(new Rect(x, y, width, size * 1.1f), a, UIKit.Face.Body, size, 1f, 0.02f, TextAnchor.UpperLeft);
             MenuStyle.Text(new Rect(x + wa + size * 0.02f, y, width, size * 1.1f), b, UIKit.Face.Display, size, 1f, 0.02f, TextAnchor.UpperLeft);
-            MenuStyle.Text(new Rect(x, y + size * 1.1f + 14f, width, 18f), "A TWO-PLAYER CO-OP GRAVITY ADVENTURE", UIKit.Face.Heavy, 13, MenuStyle.W50, 0.22f, TextAnchor.UpperLeft);
+            MenuStyle.Text(new Rect(x, y + size * 1.1f + 14f, width, 18f), "A 1-4 PLAYER CO-OP GRAVITY ADVENTURE", UIKit.Face.Heavy, 13, MenuStyle.W50, 0.22f, TextAnchor.UpperLeft);
         }
 
         void DrawPanel(float x, float width, float h, bool live)
@@ -362,6 +372,8 @@ namespace BorrowGravity
             {
                 ("Move", new[] { "W", "A", "S", "D" }), ("Look", new[] { "Mouse" }), ("Jump", new[] { "Space" }), ("Freeze · hold: steer", new[] { "E" })
             });
+            MenuStyle.Text(new Rect(x, r.yMax - 84f, inner, 16f), "Solo: E bends gravity · Q freezes.   C plays like A, D like B.",
+                UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
             MenuStyle.Text(new Rect(x, r.yMax - 64f, inner, 16f), "Phones: joystick · drag to look · JUMP · POWER     Hold R: checkpoint · Esc: pause",
                 UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
             if (MenuStyle.Button(new Rect(r.xMax - 26f - 96f, r.yMax - 26f - 34f, 96f, 34f), "Back", true)) CloseOverlay();
@@ -423,6 +435,7 @@ namespace BorrowGravity
         void StartGame()
         {
             if (overlay == Overlay.Launch) return;
+            if (NetSession.IsHost) NetSession.LockRoom(); // start with whoever is in
             overlay = Overlay.Launch;
             launchStart = Time.unscaledTime;
             joinEntry = false;
@@ -447,12 +460,13 @@ namespace BorrowGravity
                 {
                     case "-bgstage": if (int.TryParse(next, out int st)) stage = Mathf.Clamp(st - 1, 0, Stages.Length - 1); break;
                     case "-bgnocut": cutscene = false; break;
-                    case "-bghost": mode = 0; autoStart = true; break;
-                    case "-bgjoin": mode = 1; joinCode = next; break;
+                    case "-bghost": mode = 1; autoStart = true; break;
+                    case "-bgplayers": if (int.TryParse(next, out int n)) mode = Mathf.Clamp(n - 1, 1, 3); break;
+                    case "-bgjoin": mode = JoinMode; joinCode = next; break;
                 }
             }
-            if (mode == 0 && autoStart) NetSession.StartHost();
-            if (mode == 1 && joinCode.Length > 0) Connect();
+            if (autoStart && !Joining) { GameFlow.PlayerCount = mode + 1; NetSession.StartHost(); }
+            if (Joining && joinCode.Length > 0) Connect();
         }
 
         // ---------- online room ----------
@@ -493,7 +507,7 @@ namespace BorrowGravity
                 if (PlayerKeys.Pressed(Key.Enter) || PlayerKeys.Pressed(Key.NumpadEnter)) Connect();
                 return;
             }
-            if (NetSession.IsHost && NetSession.Connected && (Confirm() || autoStart)) { autoStart = false; StartGame(); }
+            if (NetSession.IsHost && NetSession.Connected && (Confirm() || (autoStart && NetSession.Full))) { autoStart = false; StartGame(); }
         }
 
         void DrawRoom(float w, float h)
@@ -545,14 +559,16 @@ namespace BorrowGravity
                 MenuStyle.Text(new Rect(x, r.y + 184f, inner, 18f), where, UIKit.Face.Body, 13, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
                 MenuStyle.Line(x, r.y + 218f, inner, MenuStyle.W25);
                 bool joined = NetSession.Connected;
+                int seats = GameFlow.PlayerCount, inRoom = NetSession.Joined;
                 float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
-                MenuStyle.Text(new Rect(x, r.y + 236f, inner, 24f), joined ? "PLAYER B HAS JOINED" : "WAITING FOR PLAYER B…", UIKit.Face.Heavy, 16, joined ? 1f : 0.45f + 0.5f * pulse, 0.12f, TextAnchor.UpperCenter);
-                MenuStyle.Paragraph(new Rect(x, r.y + 272f, inner, 50f), "You play A (Gravity Controller). On the other device: Mode → Join a Room, then type this code.",
-                    UIKit.Face.Body, 13, MenuStyle.W80);
-                MenuStyle.Text(new Rect(x, r.y + 326f, inner, 16f), Stages[stage].name + (stage == 0 && cutscene ? "  ·  Cutscene on" : ""), UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+                MenuStyle.Text(new Rect(x, r.y + 232f, inner, 24f), NetSession.Full ? "EVERYONE'S IN" : "WAITING FOR PLAYERS…  " + inRoom + "/" + seats,
+                    UIKit.Face.Heavy, 16, NetSession.Full ? 1f : 0.45f + 0.5f * pulse, 0.12f, TextAnchor.UpperCenter);
+                DrawSeats(new Rect(x, r.y + 264f, inner, 40f), seats, inRoom);
+                MenuStyle.Text(new Rect(x, r.y + 312f, inner, 16f), "You play A. On the other devices: Mode → Join a Room, then type this code.", UIKit.Face.Body, 12, MenuStyle.W80, 0f, TextAnchor.UpperCenter);
+                MenuStyle.Text(new Rect(x, r.y + 334f, inner, 16f), Stages[stage].name + (stage == 0 && cutscene ? "  ·  Cutscene on" : ""), UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
                 var startBtn = new Rect(r.xMax - 26f - 120f, r.yMax - 26f - 34f, 120f, 34f);
                 if (MenuStyle.Button(new Rect(startBtn.x - 10f - 130f, startBtn.y, 130f, 34f), "Close room")) LeaveRoom();
-                if (joined) { if (MenuStyle.Button(startBtn, "Start", true)) StartGame(); }
+                if (joined) { if (MenuStyle.Button(startBtn, NetSession.Full ? "Start" : "Start · " + inRoom, true)) StartGame(); }
                 else
                 {
                     MenuStyle.Box(startBtn, MenuStyle.W25, 1f);
@@ -562,7 +578,7 @@ namespace BorrowGravity
             }
 
             // joining device, waiting for the host
-            var jr = Modal(w, h, Mathf.Min(w * 0.92f, 520f), 260f);
+            var jr = Modal(w, h, Mathf.Min(w * 0.92f, 520f), 290f);
             float jx = jr.x + 26f, jin = jr.width - 52f;
             bool connected = NetSession.Connected;
             float p2 = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
@@ -570,10 +586,34 @@ namespace BorrowGravity
             MenuStyle.Text(new Rect(jx, jr.y + 80f, jin, 26f),
                 connected ? "CONNECTED · ROOM " + NetSession.RoomCode : "LOOKING FOR ROOM " + (NetSession.RoomCode.Length > 0 ? NetSession.RoomCode : joinCode) + "…",
                 UIKit.Face.Heavy, 18, connected ? 1f : 0.45f + 0.5f * p2, 0.08f, TextAnchor.UpperCenter);
-            MenuStyle.Paragraph(new Rect(jx, jr.y + 122f, jin, 50f),
-                connected ? "You play B (Gravity Nullifier). The host starts the game." : "Both devices on the same Wi-Fi or hotspot, with the room open on the other one.",
-                UIKit.Face.Body, 13, MenuStyle.W80);
+            if (connected)
+            {
+                int me = NetSession.LocalPlayer;
+                MenuStyle.Paragraph(new Rect(jx, jr.y + 116f, jin, 40f),
+                    "You play " + GameFlow.Letter(me) + (GameFlow.HasGravity(me) ? " (Gravity Controller)" : " (Gravity Nullifier)") + ". The host starts the game.",
+                    UIKit.Face.Body, 13, MenuStyle.W80);
+                DrawSeats(new Rect(jx, jr.y + 160f, jin, 40f), GameFlow.PlayerCount, NetSession.Joined, me);
+            }
+            else
+                MenuStyle.Paragraph(new Rect(jx, jr.y + 122f, jin, 50f), "Internet code: any network. 4-digit code: same Wi-Fi or hotspot as the host.",
+                    UIKit.Face.Body, 13, MenuStyle.W80);
             if (MenuStyle.Button(new Rect(jr.xMax - 26f - 96f, jr.yMax - 26f - 34f, 96f, 34f), "Leave")) LeaveRoom();
+        }
+
+        /// <summary>One box per seat (A-D): filled when someone is in it, brackets on this device's own letter.</summary>
+        static void DrawSeats(Rect r, int seats, int inRoom, int mine = 0)
+        {
+            const float size = 40f, gap = 12f;
+            float x = r.center.x - (seats * size + (seats - 1) * gap) * 0.5f;
+            for (int i = 0; i < seats; i++)
+            {
+                var box = new Rect(x + i * (size + gap), r.y, size, size);
+                bool taken = i < inRoom;
+                if (taken) UIKit.Fill(box, MenuStyle.White(MenuStyle.W12));
+                MenuStyle.Box(box, taken ? 1f : MenuStyle.W25, 1f);
+                if (i == mine) MenuStyle.Brackets(box);
+                MenuStyle.Text(box, GameFlow.Letter(i), UIKit.Face.Display, 18, taken ? 1f : MenuStyle.W25, 0f);
+            }
         }
     }
 }

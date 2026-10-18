@@ -25,6 +25,13 @@ namespace BorrowGravity
             GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, White(alpha), stroke, radius);
         }
 
+        /// <summary>Soft dark glass under HUD boxes so white text stays readable over bright scenery.</summary>
+        public static void Glass(Rect r, float radius = 0f, float alpha = 0.4f)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(0.02f, 0.03f, 0.07f, alpha), 0f, radius);
+        }
+
         public static void Line(float x, float y, float w, float alpha, float h = 1f) => UIKit.Fill(new Rect(x, y, w, h), White(alpha));
 
         public static void DashedLine(float x0, float x1, float y, float alpha)

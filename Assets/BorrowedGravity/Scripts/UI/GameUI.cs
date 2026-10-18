@@ -120,16 +120,25 @@ namespace BorrowGravity
             UIKit.Begin();
             float w = UIKit.Width, h = UIKit.Height;
             var sm = StageManager.Instance;
-            if (sm != null && sm.State == StageState.Intro) { DrawIntro(w, h, sm); return; }
+            if (WantsBackdrop(sm))
+            {
+                if (capturing) return; // nothing over the game while its still is taken
+                if (frosted != null) GUI.DrawTexture(new Rect(0, 0, w, h), frosted, ScaleMode.StretchToFill);
+                UIKit.Fill(new Rect(0, 0, w, h), new Color(0.02f, 0.03f, 0.07f, frosted != null ? 0.42f : 0.65f));
+                if (sm.State == StageState.Intro) DrawIntro(w, h, sm);
+                else if (sm.State == StageState.Paused) DrawPause(w, h, sm);
+                else DrawComplete(w, h, sm);
+                return;
+            }
+            SettingsOpen = false;
 
-            // split-screen divider (online, each phone shows only its own player full-screen)
-            if (!NetSession.Online)
+            // split-screen divider (offline with two players; online / solo each screen shows one player)
+            if (!NetSession.Online && !GameFlow.Solo)
             {
                 MenuStyle.Line(w * 0.5f - 0.5f, 0, 1f, MenuStyle.W50, h);
             }
             DrawWorldMarkers();
-            if (!NetSession.IsClient) DrawPowerA(new Vector2(18, 16));
-            if (!NetSession.IsHost) DrawPowerB(new Vector2(w - 18, 16));
+            DrawPanels(w);
             DrawPauseButton(w, sm);
             DrawObjective(w);
             DrawAutoZoneWarning(w);
@@ -140,9 +149,75 @@ namespace BorrowGravity
             DrawParts(w);
             DrawMessages(w, h);
             DrawHelp(w, h, sm);
-            if (sm != null && sm.State == StageState.Paused) DrawPause(w, h, sm);
-            else SettingsOpen = false;
-            if (sm != null && sm.State == StageState.Complete) DrawComplete(w, h, sm);
+        }
+
+        // ---------- frosted backdrop: a blurred still of the game behind the pause menu and the stage cards ----------
+
+        RenderTexture frosted;
+        bool capturing;
+
+        static bool WantsBackdrop(StageManager sm) =>
+            sm != null && sm.isActiveAndEnabled && (sm.State == StageState.Intro || sm.State == StageState.Paused || sm.State == StageState.Complete);
+
+        void LateUpdate()
+        {
+            bool want = WantsBackdrop(StageManager.Instance);
+            if (want && frosted == null && !capturing) StartCoroutine(CaptureBackdrop());
+            else if (!want && frosted != null && !capturing) ReleaseBackdrop();
+        }
+
+        void OnDisable() { capturing = false; ReleaseBackdrop(); }
+
+        void ReleaseBackdrop()
+        {
+            if (frosted == null) return;
+            frosted.Release();
+            Destroy(frosted);
+            frosted = null;
+        }
+
+        System.Collections.IEnumerator CaptureBackdrop()
+        {
+            capturing = true;
+            yield return new WaitForEndOfFrame();
+            Texture2D shot = null;
+            try { shot = ScreenCapture.CaptureScreenshotAsTexture(); }
+            catch (System.Exception e) { Debug.LogWarning("[UI] backdrop capture failed: " + e.Message); }
+            if (shot != null)
+            {
+                if (WantsBackdrop(StageManager.Instance)) frosted = Blur(shot);
+                Destroy(shot);
+            }
+            capturing = false;
+        }
+
+        /// <summary>Halve the image a few times (each bilinear halving averages 2x2 pixels), then scale it back up
+        /// step by step: a cheap, smooth blur that works on every phone.</summary>
+        static RenderTexture Blur(Texture src)
+        {
+            int w = Mathf.Max(8, src.width / 2), h = Mathf.Max(8, src.height / 2);
+            var cur = RenderTexture.GetTemporary(w, h, 0);
+            Graphics.Blit(src, cur);
+            for (int i = 0; i < 4; i++)
+            {
+                w = Mathf.Max(4, w / 2); h = Mathf.Max(4, h / 2);
+                var next = RenderTexture.GetTemporary(w, h, 0);
+                Graphics.Blit(cur, next);
+                RenderTexture.ReleaseTemporary(cur);
+                cur = next;
+            }
+            for (int i = 0; i < 2; i++)
+            {
+                var up = RenderTexture.GetTemporary(w * 2, h * 2, 0);
+                Graphics.Blit(cur, up);
+                RenderTexture.ReleaseTemporary(cur);
+                cur = up;
+                w *= 2; h *= 2;
+            }
+            var result = new RenderTexture(w * 2, h * 2, 0) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            Graphics.Blit(cur, result);
+            RenderTexture.ReleaseTemporary(cur);
+            return result;
         }
 
         Texture2D GravityIcon(GravityMode m)
@@ -167,6 +242,7 @@ namespace BorrowGravity
         /// <summary>A player's power panel: outline + brackets, a dotted cooldown ring with the letter, name and status.</summary>
         void PowerPanel(Rect panel, string letter, string role, float fill, bool activeGlow, string line1, string line2, bool ringRight)
         {
+            MenuStyle.Glass(panel);
             MenuStyle.Box(panel, MenuStyle.W25, 1f);
             MenuStyle.Brackets(panel);
             var ringC = new Vector2(ringRight ? panel.xMax - 50f : panel.x + 50f, panel.center.y);
@@ -180,35 +256,83 @@ namespace BorrowGravity
             MenuStyle.Text(new Rect(tx, panel.y + 76f, tw, 16f), line2, UIKit.Face.Body, 11, MenuStyle.W50, 0f, TextAnchor.UpperLeft);
         }
 
-        void DrawPowerA(Vector2 at)
+        /// <summary>What a player's power panel shows (computed on the host / offline, streamed to joining devices).</summary>
+        public struct PanelInfo
         {
-            float cd = gravityPower != null ? gravityPower.CooldownFraction : 0f;
-            var zone = gravityPower != null ? gravityPower.Target : null;
-            PowerPanel(new Rect(at.x, at.y, 320f, 104f), "A", "GRAVITY CONTROLLER", 1f - cd, false,
-                zone != null ? zone.zoneName.ToUpperInvariant() + "  ·  " + ModeLabel(zone.Mode) : "NO GRAVITY ZONE IN RANGE",
-                zone != null ? "E · switch gravity" : "", false);
+            public string role, line1, line2;
+            public float fill;
+            public bool active;
         }
 
-        void DrawPowerB(Vector2 topRight)
+        public static PanelInfo PanelFor(PlayerController p)
         {
-            var np = nullifyPower;
-            var active = np != null ? np.Active : null;
-            // on the joining phone the power runs on the host: use the streamed values
-            bool remote = NetSession.IsClient;
-            bool isActive = remote ? NetHud.bActive.Length > 0 : active != null;
-            bool cooling = remote ? NetHud.bCoolingDown : np != null && np.CooldownRemaining > 0f;
-            float fill = remote ? (isActive ? NetHud.bActiveFraction : 1f - NetHud.bCooldown)
-                                : active != null ? active.RemainingFraction : 1f - (np != null ? np.CooldownFraction : 0f);
-            string target = remote ? NetHud.bTarget : np != null && np.Target != null ? np.Target.displayName : "";
-            string activeName = remote ? NetHud.bActive : active != null ? active.displayName : "";
-            string l1 = isActive ? "HOLDING  " + activeName.ToUpperInvariant() : cooling ? "RECHARGING" : target.Length > 0 ? "TARGET  " + target.ToUpperInvariant() : "NO TARGET IN FRONT";
-            string l2 = isActive ? "Hold POWER: steer · tap: drop" : cooling ? "" : "E · nullify";
-            PowerPanel(new Rect(topRight.x - 320f, topRight.y, 320f, 104f), "B", "GRAVITY NULLIFIER", fill, isActive, l1, l2, true);
+            var info = new PanelInfo { role = "", line1 = "", line2 = "", fill = 1f };
+            if (p == null) return info;
+            var gp = p.GetComponent<GravityPower>();
+            var np = p.GetComponent<NullifyPower>();
+            bool g = gp != null && gp.enabled, n = np != null && np.enabled;
+            string nullLine = "";
+            if (n)
+            {
+                var act = np.Active;
+                nullLine = act != null ? "HOLDING  " + act.displayName.ToUpperInvariant()
+                         : np.CooldownRemaining > 0f ? "RECHARGING"
+                         : np.Target != null ? "TARGET  " + np.Target.displayName.ToUpperInvariant() : "NO TARGET IN FRONT";
+                info.active = act != null;
+            }
+            if (g && n)
+            {
+                var zone = gp.Target;
+                info.role = "GRAVITY + NULLIFY";
+                info.fill = 1f - gp.CooldownFraction;
+                info.line1 = zone != null ? "E  " + zone.zoneName.ToUpperInvariant() + " · " + ModeLabel(zone.Mode) : "E  NO GRAVITY ZONE";
+                info.line2 = "Q  " + nullLine.ToLowerInvariant();
+            }
+            else if (g)
+            {
+                var zone = gp.Target;
+                info.role = "GRAVITY CONTROLLER";
+                info.fill = 1f - gp.CooldownFraction;
+                info.line1 = zone != null ? zone.zoneName.ToUpperInvariant() + "  ·  " + ModeLabel(zone.Mode) : "NO GRAVITY ZONE IN RANGE";
+                info.line2 = zone != null ? "E · switch gravity" : "";
+            }
+            else if (n)
+            {
+                var act = np.Active;
+                info.role = "GRAVITY NULLIFIER";
+                info.fill = act != null ? act.RemainingFraction : 1f - np.CooldownFraction;
+                info.line1 = nullLine;
+                info.line2 = act != null ? "Hold POWER: steer · tap: drop" : np.CooldownRemaining > 0f ? "" : "E · nullify";
+            }
+            return info;
+        }
+
+        /// <summary>The players whose panels this device shows: its own online, A (solo) or A + B offline.</summary>
+        static System.Collections.Generic.IEnumerable<int> LocalPlayers()
+        {
+            if (NetSession.Online) { yield return NetSession.LocalPlayer; yield break; }
+            yield return 0;
+            if (!GameFlow.Solo) yield return 1;
+        }
+
+        void DrawPanels(float w)
+        {
+            int n = 0;
+            foreach (int i in LocalPlayers())
+            {
+                var info = NetSession.IsClient ? NetHud.Panel(i) : PanelFor(Players.Get(i));
+                if (string.IsNullOrEmpty(info.role)) continue;
+                bool right = n == 1;
+                var rect = right ? new Rect(w - 18f - 320f, 16f, 320f, 104f) : new Rect(18f, 16f, 320f, 104f);
+                PowerPanel(rect, GameFlow.Letter(i), info.role, info.fill, info.active, info.line1, info.line2, right);
+                n++;
+            }
         }
 
         void DrawObjective(float w)
         {
             var r = new Rect(w * 0.5f - 230, 14, 460, 74);
+            MenuStyle.Glass(r);
             MenuStyle.Box(r, MenuStyle.W25, 1f);
             MenuStyle.Brackets(r);
             var sm = StageManager.Instance;
@@ -309,11 +433,13 @@ namespace BorrowGravity
             if (mask == 0) return;
             bool right = NetSession.IsClient;
             var r = new Rect(right ? w - 18 - 320 : 18, 128, 320, 34);
+            MenuStyle.Glass(r);
             MenuStyle.Box(r, MenuStyle.W25, 1f);
             MenuStyle.Text(new Rect(r.x + 14, r.y, 80, r.height), "ENGINE", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.MiddleLeft);
             for (int p = 0; p < 2; p++)
             {
                 int state = (mask >> (p * 2)) & 3; // 1 waiting, 2 held, 3 installed
+                if (state == 0) continue; // no half for this player (solo)
                 string label = (p == 0 ? "A  " : "B  ") + (state == 3 ? "INSTALLED" : state == 2 ? "IN HAND" : "PICK UP");
                 var cell = new Rect(r.x + 90 + p * 112, r.y, 108, r.height);
                 var dot = new Rect(cell.x, cell.center.y - 5, 10, 10);
@@ -392,10 +518,12 @@ namespace BorrowGravity
         void DrawWorldMarkers()
         {
             float s = UIKit.Scale, w = UIKit.Width, h = UIKit.Height;
-            foreach (var p in new[] { playerA, playerB })
+            var me = Players.Get(NetSession.Online ? NetSession.LocalPlayer : 0);
+            foreach (var p in Players.All)
             {
                 if (p == null) continue;
-                var cam = CamFor(p);
+                // online every marker is drawn in this device's own view; offline in the matching split half
+                var cam = NetSession.Online ? CamFor(me) : CamFor(p);
                 if (cam == null || !cam.isActiveAndEnabled) continue;
                 Vector3 sp = cam.WorldToScreenPoint(p.transform.position + p.Up * 1.7f);
                 var gp = new Vector2(sp.x / s, (Screen.height - sp.y) / s);
@@ -422,29 +550,37 @@ namespace BorrowGravity
                     MenuStyle.Text(tag, p.displayName, UIKit.Face.Display, 12, MenuStyle.W80);
                 }
             }
-            var np = nullifyPower;
-            if (np != null && np.Active != null && CamFor(playerB) != null)
+            if (NetSession.IsClient) return; // the powers run on the host
+            foreach (int i in LocalPlayers())
             {
-                Vector3 sp = CamFor(playerB).WorldToScreenPoint(np.Active.WorldBounds.center);
-                if (sp.z > 0)
+                var pc = Players.Get(i);
+                if (pc == null) continue;
+                var cam = CamFor(pc);
+                if (cam == null) continue;
+                var np = pc.GetComponent<NullifyPower>();
+                if (np != null && np.enabled && np.Active != null)
                 {
-                    var c = new Vector2(sp.x / s, (Screen.height - sp.y) / s);
-                    MenuStyle.Arc(c, 30f, np.Active.RemainingFraction, 1f, 36, 3f);
-                    MenuStyle.Text(new Rect(c.x - 30, c.y - 12, 60, 24), np.Active.Remaining.ToString("0.0"), UIKit.Face.Display, 14, 1f);
+                    Vector3 sp = cam.WorldToScreenPoint(np.Active.WorldBounds.center);
+                    if (sp.z > 0)
+                    {
+                        var c = new Vector2(sp.x / s, (Screen.height - sp.y) / s);
+                        MenuStyle.Arc(c, 30f, np.Active.RemainingFraction, 1f, 36, 3f);
+                        MenuStyle.Text(new Rect(c.x - 30, c.y - 12, 60, 24), np.Active.Remaining.ToString("0.0"), UIKit.Face.Display, 14, 1f);
+                    }
                 }
-            }
-            var gpw = gravityPower;
-            if (gpw != null && gpw.Target != null && CamFor(playerA) != null)
-            {
-                Vector3 sp = CamFor(playerA).WorldToScreenPoint(gpw.Target.transform.position);
-                if (sp.z > 0)
+                var gpw = pc.GetComponent<GravityPower>();
+                if (gpw != null && gpw.enabled && gpw.Target != null)
                 {
-                    var c = new Vector2(sp.x / s, (Screen.height - sp.y) / s);
-                    string label = ModeLabel(gpw.Target.Mode);
-                    float tw = MenuStyle.Measure(label, UIKit.Face.Heavy, 11, 0.2f) + 24f;
-                    var r = new Rect(c.x - tw * 0.5f, c.y - 13, tw, 26);
-                    MenuStyle.Box(r, MenuStyle.W80, 1f, 13f);
-                    MenuStyle.Text(r, label, UIKit.Face.Heavy, 11, 1f, 0.2f);
+                    Vector3 sp = cam.WorldToScreenPoint(gpw.Target.transform.position);
+                    if (sp.z > 0)
+                    {
+                        var c = new Vector2(sp.x / s, (Screen.height - sp.y) / s);
+                        string label = ModeLabel(gpw.Target.Mode);
+                        float tw = MenuStyle.Measure(label, UIKit.Face.Heavy, 11, 0.2f) + 24f;
+                        var r = new Rect(c.x - tw * 0.5f, c.y - 13, tw, 26);
+                        MenuStyle.Box(r, MenuStyle.W80, 1f, 13f);
+                        MenuStyle.Text(r, label, UIKit.Face.Heavy, 11, 1f, 0.2f);
+                    }
                 }
             }
         }
@@ -490,7 +626,10 @@ namespace BorrowGravity
             }
             y += 30f;
             float kx = lx;
-            foreach (var (keys, label) in new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "power"), (new[] { "Mouse" }, "look") })
+            var keyHints = GameFlow.Solo
+                ? new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "gravity"), (new[] { "Q" }, "freeze"), (new[] { "Mouse" }, "look") }
+                : new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "power"), (new[] { "Mouse" }, "look") };
+            foreach (var (keys, label) in keyHints)
             {
                 foreach (var k in keys) kx += MenuStyle.Key(kx, y + 10f, k) + 4f;
                 float tw = MenuStyle.Measure(label, UIKit.Face.Body, 12, 0f);
@@ -503,8 +642,10 @@ namespace BorrowGravity
 
             // right column: label / value rows with dashed rules
             float rx = box.x + bw * 0.62f, rw = bw * 0.33f, ry = box.y + 34f;
-            string modeText = NetSession.Online ? (NetSession.IsHost ? "Online · Host" : "Online · Joined") : "Local · 2 Players";
-            foreach (var (label, value) in new[] { ("MODE", modeText), ("OBJECTIVE", sm.objectiveText), ("PLAYERS", "2 · Co-op") })
+            int count = GameFlow.PlayerCount;
+            string modeText = NetSession.Online ? (NetSession.IsHost ? "Online · Host" : "Online · Player " + GameFlow.Letter(NetSession.LocalPlayer)) : GameFlow.Solo ? "Solo" : "Local · Shared screen";
+            string playersText = GameFlow.Solo ? "1 · Both powers" : count + " · Co-op";
+            foreach (var (label, value) in new[] { ("MODE", modeText), ("OBJECTIVE", sm.objectiveText), ("PLAYERS", playersText) })
             {
                 MenuStyle.Text(new Rect(rx, ry, rw, 18f), label, UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.MiddleLeft);
                 MenuStyle.Text(new Rect(rx, ry, rw, 18f), value, UIKit.Face.Body, 13, MenuStyle.W80, 0f, TextAnchor.MiddleRight);
@@ -512,7 +653,7 @@ namespace BorrowGravity
                 ry += 35f;
             }
 
-            MenuStyle.Text(new Rect(0, box.yMax + 46f, w, 22f), "Ready when you are. Stay close to your partner, and don't let go.", UIKit.Face.Body, 17, 1f, 0f, TextAnchor.UpperCenter);
+            MenuStyle.Text(new Rect(0, box.yMax + 46f, w, 22f), GameFlow.Solo ? "Ready when you are. Bend it, freeze it, and don't let go." : "Ready when you are. Stay close to your crew, and don't let go.", UIKit.Face.Body, 17, 1f, 0f, TextAnchor.UpperCenter);
             float pulse = 0.45f + 0.45f * Mathf.Sin(Time.unscaledTime * 4f);
             MenuStyle.Text(new Rect(0, box.yMax + 82f, w, 14f), "STARTING IN " + Mathf.CeilToInt(sm.IntroLeft) + "  ·  TAP OR PRESS SPACE TO START NOW", UIKit.Face.Heavy, 11, pulse, 0.3f, TextAnchor.UpperCenter);
 

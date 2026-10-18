@@ -12,26 +12,25 @@ using UnityEngine;
 namespace BorrowGravity
 {
     /// <summary>
-    /// Internet rooms through Unity Relay: the host gets a join code from Unity's relay service, the other player
-    /// types it in, and both talk through Unity's relay servers (works across different networks / IPs, no port
+    /// Internet rooms through Unity Relay: the host gets a join code from Unity's relay service, the other players
+    /// type it in, and everyone talks through Unity's relay servers (works across different networks / IPs, no port
     /// forwarding). Carries the same byte packets as the same-Wi-Fi link in <see cref="NetSession"/>.
     /// Needs the project linked to a Unity Cloud project (Relay enabled) and an internet connection.
     /// </summary>
     public static class RelayLink
     {
         static NetworkDriver driver;
-        static NetworkConnection connection;
+        // slot -> connection; the client only uses slot 0 (the host), the host one slot per guest
+        static readonly NetworkConnection[] connections = new NetworkConnection[4];
         static bool isHost;
 
         public static bool Active => driver.IsCreated;
-        public static bool PeerConnected => driver.IsCreated && connection.IsCreated &&
-                                            driver.GetConnectionState(connection) == NetworkConnection.State.Connected;
 
-        /// <summary>Raised on the main thread: (bytes) for every packet from the other player.</summary>
-        public static event Action<byte[]> Received;
-        /// <summary>Raised when the link to the other player is up (client connected / host accepted).</summary>
-        public static event Action Connected;
-        public static event Action Disconnected;
+        /// <summary>Raised on the main thread: (slot, bytes) for every packet from another player.</summary>
+        public static event Action<int, byte[]> Received;
+        /// <summary>Raised when a link is up (client connected to the host / host accepted a guest), with its slot.</summary>
+        public static event Action<int> Connected;
+        public static event Action<int> Disconnected;
 
         static async Task SignIn()
         {
@@ -39,12 +38,12 @@ namespace BorrowGravity
             if (!AuthenticationService.Instance.IsSignedIn) await AuthenticationService.Instance.SignInAnonymouslyAsync();
         }
 
-        /// <summary>Host: create a relay allocation for one guest and return its join code.</summary>
-        public static async Task<string> HostAsync()
+        /// <summary>Host: create a relay allocation for up to <paramref name="guests"/> players and return its join code.</summary>
+        public static async Task<string> HostAsync(int guests)
         {
             Shutdown();
             await SignIn();
-            var allocation = await RelayService.Instance.CreateAllocationAsync(1);
+            var allocation = await RelayService.Instance.CreateAllocationAsync(Mathf.Clamp(guests, 1, connections.Length - 1));
             string code = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
             var data = allocation.ToRelayServerData("dtls");
             var settings = new NetworkSettings();
@@ -74,9 +73,11 @@ namespace BorrowGravity
                 Shutdown();
                 throw new Exception("Relay: could not connect");
             }
-            connection = driver.Connect(data.Endpoint); // through the relay server
+            connections[0] = driver.Connect(data.Endpoint); // through the relay server
             isHost = false;
         }
+
+        static bool IsUp(NetworkConnection c) => c.IsCreated && driver.GetConnectionState(c) == NetworkConnection.State.Connected;
 
         /// <summary>Run the transport and hand out events/packets (call every frame).</summary>
         public static void Pump()
@@ -89,46 +90,43 @@ namespace BorrowGravity
                 NetworkConnection incoming;
                 while ((incoming = driver.Accept()) != default)
                 {
-                    if (connection.IsCreated && driver.GetConnectionState(connection) == NetworkConnection.State.Connected)
-                    {
-                        driver.Disconnect(incoming); // one guest per room
-                        continue;
-                    }
-                    connection = incoming;
-                    Connected?.Invoke();
+                    int slot = -1;
+                    for (int i = 0; i < connections.Length && slot < 0; i++) if (!IsUp(connections[i])) slot = i;
+                    if (slot < 0) { driver.Disconnect(incoming); continue; } // room full
+                    connections[slot] = incoming;
+                    Connected?.Invoke(slot);
                 }
             }
-            if (!connection.IsCreated) return;
 
-            NetworkEvent.Type ev;
-            while ((ev = driver.PopEventForConnection(connection, out var reader)) != NetworkEvent.Type.Empty)
+            for (int slot = 0; slot < connections.Length; slot++)
             {
-                switch (ev)
+                if (!driver.IsCreated || !connections[slot].IsCreated) continue;
+                NetworkEvent.Type ev;
+                while (driver.IsCreated && (ev = driver.PopEventForConnection(connections[slot], out var reader)) != NetworkEvent.Type.Empty)
                 {
-                    case NetworkEvent.Type.Connect:
-                        Connected?.Invoke();
-                        break;
-                    case NetworkEvent.Type.Data:
+                    if (ev == NetworkEvent.Type.Connect) Connected?.Invoke(slot);
+                    else if (ev == NetworkEvent.Type.Data)
                     {
                         var native = new NativeArray<byte>(reader.Length, Allocator.Temp);
                         reader.ReadBytes(native);
                         var bytes = native.ToArray();
                         native.Dispose();
-                        Received?.Invoke(bytes);
+                        Received?.Invoke(slot, bytes);
+                    }
+                    else if (ev == NetworkEvent.Type.Disconnect)
+                    {
+                        connections[slot] = default;
+                        Disconnected?.Invoke(slot);
                         break;
                     }
-                    case NetworkEvent.Type.Disconnect:
-                        connection = default;
-                        Disconnected?.Invoke();
-                        return;
                 }
             }
         }
 
-        public static void Send(byte[] buffer, int length)
+        public static void Send(int slot, byte[] buffer, int length)
         {
-            if (!PeerConnected) return;
-            if (driver.BeginSend(connection, out var writer) != 0) return;
+            if (!driver.IsCreated || slot < 0 || slot >= connections.Length || !IsUp(connections[slot])) return;
+            if (driver.BeginSend(connections[slot], out var writer) != 0) return;
             var native = new NativeArray<byte>(length, Allocator.Temp);
             NativeArray<byte>.Copy(buffer, native, length);
             writer.WriteBytes(native);
@@ -140,12 +138,12 @@ namespace BorrowGravity
         {
             if (driver.IsCreated)
             {
-                if (connection.IsCreated) driver.Disconnect(connection);
+                foreach (var c in connections) if (c.IsCreated) driver.Disconnect(c);
                 driver.ScheduleUpdate().Complete();
                 driver.Dispose();
             }
             driver = default;
-            connection = default;
+            for (int i = 0; i < connections.Length; i++) connections[i] = default;
         }
     }
 }

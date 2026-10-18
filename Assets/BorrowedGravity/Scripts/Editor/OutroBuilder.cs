@@ -132,6 +132,8 @@ namespace BorrowGravity.EditorTools
             Cue(cs, 19f, CueType.Shake, null, 1.6f);
             Cue(cs, 19f, CueType.Sound, null, 1f, SfxId.Impact);
 
+            Crew(cs, root, a, b, new Vector3(-1.4f, 0f, -0.6f), new Vector3(-1.4f, 0f, 0.6f), (1, halfB.gameObject));
+
             // ---------- dialogue ----------
             Line(cs, 1.6f, 2.9f, "", Narrator, "Back at the docking platform, with a brand-new engine...");
             Line(cs, 4.7f, 2.1f, "A", ColA, "Got your half? Don't drop it now...");

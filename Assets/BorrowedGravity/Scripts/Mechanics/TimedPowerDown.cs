@@ -35,7 +35,7 @@ namespace BorrowGravity
             if (p != null) inside.Add(p);
             if (running != null) return;
             bool carrier = other.GetComponentInParent<EngineCarrier>() != null;
-            if ((triggeredByPlayers && p != null && inside.Count >= requiredPlayers) || (triggeredByCarrier && carrier)) Begin();
+            if ((triggeredByPlayers && p != null && inside.Count >= Mathf.Min(requiredPlayers, Mathf.Max(1, Players.All.Count))) || (triggeredByCarrier && carrier)) Begin();
         }
 
         void OnTriggerExit(Collider other)

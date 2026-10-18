@@ -36,7 +36,14 @@ namespace BorrowGravity
             if (inputs == null || inputs.Length == 0) return false;
             if (mode == GateMode.All)
             {
-                foreach (var s in inputs) if (s == null || !s.IsOn) return false;
+                // solo: one person can't hold two pressure plates at once, so any pressed plate counts for all of them
+                bool anyPlate = false;
+                if (GameFlow.Solo) foreach (var s in inputs) if (s is PressurePlate && s.IsOn) { anyPlate = true; break; }
+                foreach (var s in inputs)
+                {
+                    if (anyPlate && s is PressurePlate) continue;
+                    if (s == null || !s.IsOn) return false;
+                }
                 return true;
             }
             foreach (var s in inputs) if (s != null && s.IsOn) return true;

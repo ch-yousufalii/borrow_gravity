@@ -392,6 +392,8 @@ namespace BorrowGravity.EditorTools
 
             Astronaut(ctx, 0, start.GetSpawn(0));
             Astronaut(ctx, 1, start.GetSpawn(1));
+            Astronaut(ctx, 2, start.GetSpawn(2));
+            Astronaut(ctx, 3, start.GetSpawn(3));
             CoreObjects(ctx, 2, "STAGE 2 — THE UPSIDE-DOWN STATION", HudObjective.FindEngine, "Find the Engine",
                 "The station's gravity generators have gone haywire. Rooms flip, cargo drifts, walls become floors.\n\n" +
                 "Fight your way through the facility to the engine vault. A still bends gravity in the marked fields; B still freezes and steers loose objects.",

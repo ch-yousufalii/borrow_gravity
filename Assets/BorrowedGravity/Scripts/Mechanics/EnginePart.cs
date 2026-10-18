@@ -38,6 +38,7 @@ namespace BorrowGravity
 
         void Start()
         {
+            if (owner >= GameFlow.PlayerCount) { gameObject.SetActive(false); return; } // nobody to carry it
             if (!startHeld || NetSession.IsClient) return;
             var p = Players.Get(owner);
             if (p != null) PickUp(p, true);

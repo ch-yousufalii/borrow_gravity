@@ -147,6 +147,8 @@ namespace BorrowGravity.EditorTools
             Move(cs, a, 28.5f, 2f, new Vector3(5.3f, 0.92f, 0.4f), new Vector3(1.9f, 0.92f, 0f), new Vector3(0, 90, 0), new Vector3(0, 80, 0), true);
             Move(cs, b, 28.7f, 2f, new Vector3(5.6f, 0.92f, -0.6f), new Vector3(3.7f, 0.92f, 0f), new Vector3(0, 70, 0), new Vector3(0, 90, 0), true);
 
+            Crew(cs, root, a, b, new Vector3(-1.2f, 0f, 1.1f), new Vector3(-0.3f, 0f, -1.5f), (1, halfB.gameObject));
+
             // ---------- dialogue ----------
             Line(cs, 1.5f, 3.2f, "", Narrator, "Somewhere in the Shattered Orbit, a small cargo ship limps home...");
             Line(cs, 5.0f, 2.0f, "A", ColA, "Six more hours and we're home.");
@@ -197,11 +199,38 @@ namespace BorrowGravity.EditorTools
 
         internal static Transform Actor(Transform parent, int index, Vector3 pos)
         {
-            var go = new GameObject(index == 0 ? "Astronaut_A" : "Astronaut_B");
+            var go = new GameObject("Astronaut_" + GameFlow.Letter(index));
             go.transform.SetParent(parent, false);
             go.transform.position = pos;
             SuitModel(go.transform, index);
             return go.transform;
+        }
+
+        /// <summary>
+        /// The rest of the crew for 3-4 player games: C walks a step behind A and D behind B, copying their moves
+        /// (and their appear / disappear cues). Players who aren't in the game are hidden by the cutscene.
+        /// </summary>
+        internal static void Crew(Cutscene cs, Transform root, Transform a, Transform b, Vector3 offC, Vector3 offD, params (int player, GameObject go)[] extra)
+        {
+            const float delay = 0.35f;
+            var c = Actor(root, 2, a.position + offC);
+            var d = Actor(root, 3, b.position + offD);
+            foreach (var (lead, follower, off) in new[] { (a, c, offC), (b, d, offD) })
+            {
+                follower.rotation = lead.rotation;
+                var anim = follower.GetComponent<SuitAnimator>();
+                if (anim != null) anim.holdArms = false;
+                foreach (var m in cs.moves.ToArray())
+                    if (m.actor == lead)
+                        cs.moves.Add(new CutsceneMove { actor = follower, time = m.time + delay, duration = m.duration, fromPos = m.fromPos + off, toPos = m.toPos + off, fromEuler = m.fromEuler, toEuler = m.toEuler, walk = m.walk });
+                foreach (var q in cs.cues.ToArray())
+                    if (q.target == lead.gameObject && (q.type == CueType.Activate || q.type == CueType.Deactivate))
+                        cs.cues.Add(new CutsceneCue { time = q.time + delay, type = q.type, target = follower.gameObject, amount = q.amount, sound = q.sound });
+            }
+            cs.seats.Add(new CutsceneSeat { player = 1, target = b.gameObject });
+            cs.seats.Add(new CutsceneSeat { player = 2, target = c.gameObject });
+            cs.seats.Add(new CutsceneSeat { player = 3, target = d.gameObject });
+            foreach (var (player, go) in extra) cs.seats.Add(new CutsceneSeat { player = player, target = go });
         }
 
         internal enum Kind { Trail, Sparks, Smoke, Explosion, Dust }

@@ -23,6 +23,7 @@ namespace BorrowGravity.EditorTools
         /// <summary>"section|prefab|n" → piece, fixed at load time so removing pieces never shifts indices.</summary>
         public readonly Dictionary<string, GameObject> byKey = new Dictionary<string, GameObject>();
         public PlayerController playerA, playerB;
+        public readonly List<PlayerController> players = new List<PlayerController>();
         public GravityPower gravityPower;
         public NullifyPower nullifyPower;
         public GameUI ui;
@@ -390,7 +391,9 @@ namespace BorrowGravity.EditorTools
             cp.spawnOffsets = new[]
             {
                 new Vector3(sx - 0.9f - at.x, sy + 1.05f - at.y, spawnZ - at.z),
-                new Vector3(sx + 0.9f - at.x, sy + 1.05f - at.y, spawnZ - at.z)
+                new Vector3(sx + 0.9f - at.x, sy + 1.05f - at.y, spawnZ - at.z),
+                new Vector3(sx - 2.4f - at.x, sy + 1.05f - at.y, spawnZ - at.z),
+                new Vector3(sx + 2.4f - at.x, sy + 1.05f - at.y, spawnZ - at.z)
             };
             var light = new GameObject("BeaconLight").AddComponent<Light>();
             light.transform.SetParent(beacon.transform, false);
@@ -490,8 +493,8 @@ namespace BorrowGravity.EditorTools
                 if (font != null) go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
                 return tm;
             }
-            board.title = Text("Title", titleText.ToUpperInvariant(), 72, new Color(1f, 0.62f, 0.36f), 0f);
-            board.body = Text("Body", Wrap(bodyText, 40), 54, new Color(0.96f, 0.92f, 0.95f), -0.32f);
+            board.title = Text("Title", titleText.ToUpperInvariant(), 72, Color.white, 0f);
+            board.body = Text("Body", Wrap(bodyText, 40), 54, new Color(1f, 1f, 1f, 0.85f), -0.32f);
 
             Transform Quad(string name, Material mat)
             {
@@ -503,8 +506,9 @@ namespace BorrowGravity.EditorTools
                 q.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
                 return q.transform;
             }
-            board.panel = Quad("Panel", Transparent("BoardPanel", new Color(0.08f, 0.04f, 0.12f, 0.78f)));
-            board.edge = Quad("Edge", Lit("BoardEdge", new Color(1f, 0.62f, 0.36f), new Color(1f, 0.62f, 0.36f) * 2f));
+            // the menu's look in the world: dark glass, white text, a white hairline edge
+            board.panel = Quad("Panel", Transparent("BoardPanel", new Color(0.02f, 0.03f, 0.07f, 0.62f)));
+            board.edge = Quad("Edge", Lit("BoardEdge", Color.white, Color.white * 1.2f));
             return board;
         }
 
@@ -584,10 +588,10 @@ namespace BorrowGravity.EditorTools
 
         public static PlayerController Astronaut(StageContext ctx, int index, Vector3 pos)
         {
-            EngineHalf(ctx, index, pos + Vector3.right * 0.65f, true); // carried in the hands all game
+            if (index <= 1) EngineHalf(ctx, index, pos + Vector3.right * 0.65f, true); // A and B carry the engine halves all game
             bool a = index == 0;
-            Color suit = a ? new Color(1f, 0.55f, 0.15f) : new Color(0.25f, 0.6f, 1f);
-            var root = new GameObject(a ? "Player_A" : "Player_B");
+            Color suit = SuitColor(index);
+            var root = new GameObject("Player_" + GameFlow.Letter(index));
             root.transform.SetParent(ctx.Group("Players"), false);
             root.transform.position = pos;
             root.transform.rotation = Quaternion.LookRotation(Vector3.right);
@@ -603,18 +607,35 @@ namespace BorrowGravity.EditorTools
             g.isPlayer = true;
             var pc = root.AddComponent<PlayerController>();
             pc.playerIndex = index;
-            pc.displayName = a ? "A" : "B";
+            pc.displayName = GameFlow.Letter(index);
             pc.color = suit;
-            pc.keys = a
+            pc.keys = index != 1
                 ? new PlayerKeys { up = Key.W, down = Key.S, left = Key.A, right = Key.D, jump = Key.Space, power = Key.E }
                 : new PlayerKeys { up = Key.UpArrow, down = Key.DownArrow, left = Key.LeftArrow, right = Key.RightArrow, jump = Key.RightCtrl, jumpAlt = Key.Enter, power = Key.RightShift };
 
             SuitModel(root.transform, index);
 
-            if (a) ctx.gravityPower = root.AddComponent<GravityPower>();
-            else ctx.nullifyPower = root.AddComponent<NullifyPower>();
-            if (a) ctx.playerA = pc; else ctx.playerB = pc;
+            // every astronaut has both powers; GameStages switches on the right one(s) for the player count
+            var gp = root.AddComponent<GravityPower>();
+            var np = root.AddComponent<NullifyPower>();
+            gp.enabled = index % 2 == 0;
+            np.enabled = index % 2 == 1;
+            if (index == 0) { ctx.gravityPower = gp; ctx.playerA = pc; }
+            if (index == 1) { ctx.nullifyPower = np; ctx.playerB = pc; }
+            ctx.players.Add(pc);
             return pc;
+        }
+
+        /// <summary>A orange, B blue, C green, D purple.</summary>
+        public static Color SuitColor(int index)
+        {
+            switch (index)
+            {
+                case 0: return new Color(1f, 0.55f, 0.15f);
+                case 1: return new Color(0.25f, 0.6f, 1f);
+                case 2: return new Color(0.3f, 0.9f, 0.45f);
+                default: return new Color(0.72f, 0.42f, 1f);
+            }
         }
 
         /// <summary>
@@ -623,13 +644,13 @@ namespace BorrowGravity.EditorTools
         /// </summary>
         public static GameObject SuitModel(Transform root, int index)
         {
-            bool a = index == 0;
-            Color suit = a ? new Color(1f, 0.55f, 0.15f) : new Color(0.25f, 0.6f, 1f);
+            Color suit = SuitColor(index);
+            string letter = GameFlow.Letter(index);
             var white = Lit("Suit_White", new Color(0.9f, 0.9f, 0.93f), null, 0.45f);
-            var trim = Lit(a ? "Suit_A" : "Suit_B", suit, suit * 0.3f, 0.4f);
+            var trim = Lit("Suit_" + letter, suit, suit * 0.3f, 0.4f);
             var dark = Lit("Suit_Dark", new Color(0.16f, 0.15f, 0.2f), null, 0.3f);
             var visor = Lit("Visor", new Color(0.03f, 0.05f, 0.09f), new Color(0.35f, 0.85f, 1f) * 0.7f, 0.97f);
-            var glow = Lit(a ? "Glow_A" : "Glow_B", suit, suit * 3.5f);
+            var glow = Lit("Glow_" + letter, suit, suit * 3.5f);
             var model = new GameObject("SuitModel");
             model.transform.SetParent(root, false);
             var m = model.transform;
@@ -691,17 +712,18 @@ namespace BorrowGravity.EditorTools
             string intro, string completeTitle, string complete, float killY, bool final = false,
             TimeOfDay.Key[] times = null, float routeStartX = 0f, float routeEndX = 170f)
         {
-            // split screen: Player A on the left half, Player B on the right half, each with its own follow camera
+            // every astronaut has its own follow camera; GameStages / NetWorld decide which one this device shows
             ctx.cameras.Clear();
-            foreach (var p in new[] { ctx.playerA, ctx.playerB })
+            foreach (var p in ctx.players)
             {
                 bool a = p == ctx.playerA;
-                var camGo = new GameObject(a ? "Camera_A" : "Camera_B");
+                var camGo = new GameObject("Camera_" + p.displayName);
                 if (a) camGo.tag = "MainCamera";
                 var cam = camGo.AddComponent<Camera>();
                 cam.fieldOfView = 60f;
                 cam.farClipPlane = 2000f;
-                cam.rect = a ? new Rect(0f, 0f, 0.5f, 1f) : new Rect(0.5f, 0f, 0.5f, 1f);
+                cam.rect = p.playerIndex == 0 ? new Rect(0f, 0f, 0.5f, 1f) : new Rect(0.5f, 0f, 0.5f, 1f);
+                if (p.playerIndex >= 2) camGo.SetActive(false);
                 if (a) camGo.AddComponent<AudioListener>();
                 cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
                 var coop = camGo.AddComponent<CoopCamera>();

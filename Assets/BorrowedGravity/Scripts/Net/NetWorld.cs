@@ -119,18 +119,25 @@ namespace BorrowGravity
             SetupScreens();
         }
 
-        /// <summary>One player per phone: this phone's camera fills the screen, the other one is switched off.</summary>
+        /// <summary>One player per phone: this phone's camera fills the screen, the other players' are switched off.</summary>
         void SetupScreens()
         {
             var mine = Players.Get(NetSession.LocalPlayer);
-            var other = Players.Get(1 - NetSession.LocalPlayer);
             var myCam = mine != null ? mine.ViewCamera : null;
-            var otherCam = other != null ? other.ViewCamera : null;
-            if (myCam == null || otherCam == null || myCam == otherCam) return;
+            if (myCam == null) return;
+            myCam.gameObject.SetActive(true);
             myCam.rect = new Rect(0f, 0f, 1f, 1f);
-            if (otherCam.CompareTag("MainCamera")) { otherCam.tag = "Untagged"; myCam.tag = "MainCamera"; }
-            if (myCam.GetComponent<AudioListener>() == null && otherCam.GetComponent<AudioListener>() != null) myCam.gameObject.AddComponent<AudioListener>();
-            otherCam.gameObject.SetActive(false);
+            myCam.tag = "MainCamera";
+            bool hadListener = false;
+            foreach (var p in Players.All)
+            {
+                var cam = p != null ? p.ViewCamera : null;
+                if (cam == null || cam == myCam) continue;
+                if (cam.CompareTag("MainCamera")) cam.tag = "Untagged";
+                hadListener |= cam.GetComponent<AudioListener>() != null;
+                cam.gameObject.SetActive(false);
+            }
+            if (hadListener && myCam.GetComponent<AudioListener>() == null) myCam.gameObject.AddComponent<AudioListener>();
         }
 
         /// <summary>Client: the host decides everything, so stop local gameplay, physics and triggers.</summary>
@@ -169,7 +176,7 @@ namespace BorrowGravity
             bw.Write(id);
             bw.Write(ti);
             bw.Write(w.Index(instance.transform.parent));
-            NetSession.SendToPeer();
+            NetSession.Send();
         }
 
         void LateUpdate()
@@ -202,7 +209,7 @@ namespace BorrowGravity
             ms.Position = 2;
             packet.Write((ushort)packetCount);
             ms.Position = end;
-            NetSession.SendToPeer();
+            NetSession.Send();
             BeginPacket();
         }
 
@@ -250,7 +257,7 @@ namespace BorrowGravity
                 {
                     spawned.Remove(id);
                     NetSession.Write(NetMsg.Despawn).Write(id);
-                    NetSession.SendToPeer();
+                    NetSession.Send();
                 }
         }
 
@@ -283,14 +290,16 @@ namespace BorrowGravity
             w.Write((short)(sm != null ? sm.Deaths : 0));
             w.Write(sm != null ? sm.ResetHold : 0f);
 
-            var b = Players.Get(1);
-            var np = b != null ? b.GetComponent<NullifyPower>() : null;
-            if (np == null) np = FindFirstObjectByType<NullifyPower>();
-            w.Write(np != null && np.Target != null ? np.Target.displayName : "");
-            w.Write(np != null && np.Active != null ? np.Active.displayName : "");
-            w.Write(np != null && np.Active != null ? np.Active.RemainingFraction : 0f);
-            w.Write(np != null ? np.CooldownFraction : 0f);
-            w.Write(np != null && np.CooldownRemaining > 0f);
+            // every player's power panel (each joined device draws its own)
+            for (int i = 0; i < 4; i++)
+            {
+                var info = GameUI.PanelFor(Players.Get(i));
+                w.Write(info.role ?? "");
+                w.Write(info.line1 ?? "");
+                w.Write(info.line2 ?? "");
+                w.Write(info.fill);
+                w.Write(info.active);
+            }
 
             var e = EngineCarrier.Instance;
             w.Write(e != null);
@@ -301,7 +310,7 @@ namespace BorrowGravity
             w.Write(GameUI.CountdownLeft);
             w.Write((byte)GameUI.PartsMask());
 
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < 4; p++)
             {
                 var pc = Players.Get(p);
                 w.Write((byte)((pc != null && pc.IsPushing ? 1 : 0) | (pc != null && pc.IsCarrying ? 2 : 0)));
@@ -312,7 +321,7 @@ namespace BorrowGravity
                 w.Write((byte)(z != null ? z.Mode : GravityMode.Down));
                 w.Write(z != null ? z.AutoTimeLeft : 0f);
             }
-            NetSession.SendToPeer();
+            NetSession.Send();
         }
 
         // ---------- client ----------
@@ -375,11 +384,8 @@ namespace BorrowGravity
             NetHud.resetHold = r.ReadSingle();
             StageManager.Instance?.ApplyRemote(state, time, deaths, NetHud.resetHold);
 
-            NetHud.bTarget = r.ReadString();
-            NetHud.bActive = r.ReadString();
-            NetHud.bActiveFraction = r.ReadSingle();
-            NetHud.bCooldown = r.ReadSingle();
-            NetHud.bCoolingDown = r.ReadBoolean();
+            for (int i = 0; i < 4; i++)
+                NetHud.SetPanel(i, new GameUI.PanelInfo { role = r.ReadString(), line1 = r.ReadString(), line2 = r.ReadString(), fill = r.ReadSingle(), active = r.ReadBoolean() });
 
             NetHud.hasEngine = r.ReadBoolean();
             NetHud.engineStability01 = r.ReadSingle();
@@ -389,7 +395,7 @@ namespace BorrowGravity
             NetHud.countdownLeft = r.ReadSingle();
             NetHud.partsMask = r.ReadByte();
 
-            for (int p = 0; p < 2; p++)
+            for (int p = 0; p < 4; p++)
             {
                 byte f = r.ReadByte();
                 Players.Get(p)?.SetRemoteFlags((f & 1) != 0, (f & 2) != 0);
