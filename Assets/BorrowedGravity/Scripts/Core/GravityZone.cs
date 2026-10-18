@@ -150,6 +150,14 @@ namespace BorrowGravity
             return Vector3.ProjectOnPlane(worldPoint - c, radialAxis).magnitude <= radialMaxDistance;
         }
 
+        /// <summary>True when the point is under the field (inside its footprint, below its floor) — e.g. a board that fell out of it.</summary>
+        public bool IsBelow(Vector3 worldPoint, float maxDepth = 40f)
+        {
+            Vector3 p = transform.InverseTransformPoint(worldPoint);
+            Vector3 h = size * 0.5f;
+            return Mathf.Abs(p.x) <= h.x && Mathf.Abs(p.z) <= h.z && p.y < -h.y && p.y > -h.y - maxDepth;
+        }
+
         public float DistanceTo(Vector3 worldPoint)
         {
             Vector3 p = transform.InverseTransformPoint(worldPoint);
