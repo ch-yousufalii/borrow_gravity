@@ -1,0 +1,739 @@
+[
+ {
+  "category": "Shared",
+  "name": "Rock_Debris_S",
+  "note": "Small floating debris rock (dynamic)",
+  "tris": 20,
+  "size": [
+   1.05,
+   0.83,
+   1.05
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Rock_Debris_M",
+  "note": "Medium debris rock with crystals",
+  "tris": 78,
+  "size": [
+   2.67,
+   2.33,
+   1.91
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Rock_Debris_L",
+  "note": "Large debris rock",
+  "tris": 88,
+  "size": [
+   6.02,
+   3.55,
+   4.54
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Island_S",
+  "note": "Floating island, 3 m wide, walkable top at y=0",
+  "tris": 128,
+  "size": [
+   3.55,
+   2.36,
+   3.2
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Island_M",
+  "note": "Floating island, 6 m wide, walkable top at y=0",
+  "tris": 156,
+  "size": [
+   6.64,
+   4.21,
+   5.91
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Island_L",
+  "note": "Floating island, 10 m wide, walkable top at y=0",
+  "tris": 182,
+  "size": [
+   10.59,
+   7.09,
+   10.67
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Monolith_A",
+  "note": "Tall faceted monolith with glowing seams (~10 m)",
+  "tris": 168,
+  "size": [
+   4.24,
+   10.44,
+   4.95
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Monolith_B",
+  "note": "Leaning monolith (9 m)",
+  "tris": 156,
+  "size": [
+   3.78,
+   8.91,
+   3.82
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Monolith_Broken",
+  "note": "Broken monolith stump with a floating top block (7 m)",
+  "tris": 182,
+  "size": [
+   3.98,
+   8.13,
+   4.85
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Floating_Block",
+  "note": "Hovering stone block with a glowing underside",
+  "tris": 38,
+  "size": [
+   1.71,
+   2.73,
+   1.55
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Mesa_A",
+  "note": "Distant mesa formation (40 m) - background only",
+  "tris": 164,
+  "size": [
+   34.78,
+   17.1,
+   14.99
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Mesa_B",
+  "note": "Distant mesa formation (26 m) - background only",
+  "tris": 164,
+  "size": [
+   24.75,
+   20.35,
+   11.68
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Platform_Metal_2x2",
+  "note": "Sci-fi hover platform 2x2 m, top at y=0",
+  "tris": 444,
+  "size": [
+   2.36,
+   1.1,
+   2.36
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Platform_Metal_4x4",
+  "note": "Sci-fi hover platform 4x4 m, top at y=0",
+  "tris": 924,
+  "size": [
+   4.3,
+   1.1,
+   4.3
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Platform_Metal_6x3",
+  "note": "Long hover platform 6x3 m, top at y=0",
+  "tris": 1084,
+  "size": [
+   6.24,
+   1.1,
+   3.33
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Platform_Weak_4x4",
+  "note": "Weak / cracking 4x4 platform (red warnings)",
+  "tris": 948,
+  "size": [
+   4.3,
+   1.12,
+   4.3
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Girder_6m",
+  "note": "Construction girder / truss 6 m (pivot bottom-centre)",
+  "tris": 348,
+  "size": [
+   6.14,
+   1.25,
+   1.05
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Girder_Broken",
+  "note": "Torn girder with bent end and hot sparks",
+  "tris": 324,
+  "size": [
+   5.92,
+   1.93,
+   1.57
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Crate_1m",
+  "note": "Cargo crate 1 m (Player B target)",
+  "tris": 152,
+  "size": [
+   1.06,
+   1.04,
+   1.06
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Crate_Heavy_2m",
+  "note": "Heavy cargo crate 2 m with hazard band",
+  "tris": 412,
+  "size": [
+   2.12,
+   1.74,
+   2.12
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Pressure_Plate",
+  "note": "Two-player pressure plate, 2 m hex",
+  "tris": 80,
+  "size": [
+   1.73,
+   0.27,
+   2.0
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "GravityZone_Pad",
+  "note": "Gravity-zone floor pad with direction arrow",
+  "tris": 152,
+  "size": [
+   3.06,
+   0.25,
+   3.5
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Gravity_Arrow",
+  "note": "Floating gravity direction arrow (double chevron, emissive)",
+  "tris": 48,
+  "size": [
+   1.19,
+   1.1,
+   0.2
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Checkpoint_Beacon",
+  "note": "Checkpoint beacon with green crystal",
+  "tris": 184,
+  "size": [
+   1.39,
+   3.4,
+   1.39
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Warning_Light",
+  "note": "Warning light post (red lamp)",
+  "tris": 176,
+  "size": [
+   0.65,
+   2.33,
+   0.65
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Cable_Hanging",
+  "note": "Hanging damaged cable 8 m (pivot at top anchor)",
+  "tris": 304,
+  "size": [
+   0.9,
+   8.2,
+   0.9
+  ]
+ },
+ {
+  "category": "Shared",
+  "name": "Counterweight",
+  "note": "Heavy counterweight (pivot at top hook)",
+  "tris": 124,
+  "size": [
+   1.56,
+   2.1,
+   1.8
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Spaceship",
+  "note": "The crew's spaceship (~13 m), engine bay on the back",
+  "tris": 718,
+  "size": [
+   12.7,
+   5.3,
+   11.79
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "ServiceTower_Segment",
+  "note": "Service tower segment 4x4x6 m, stackable",
+  "tris": 276,
+  "size": [
+   4.41,
+   6.15,
+   4.36
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "ServiceTower_Top",
+  "note": "Service tower top: antenna, dish and beacons",
+  "tris": 196,
+  "size": [
+   4.23,
+   7.0,
+   4.2
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Airlock_Frame",
+  "note": "Station airlock frame (opening 6 x 5.5 m)",
+  "tris": 480,
+  "size": [
+   10.0,
+   7.4,
+   3.2
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Airlock_Door_L",
+  "note": "Airlock door left half (slide on local X to open)",
+  "tris": 152,
+  "size": [
+   3.01,
+   5.5,
+   0.55
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Airlock_Door_R",
+  "note": "Airlock door right half (slide on local X to open)",
+  "tris": 152,
+  "size": [
+   3.01,
+   5.5,
+   0.55
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Wreck_Hull_A",
+  "note": "Wrecked hull shell fragment (~6 m)",
+  "tris": 388,
+  "size": [
+   5.43,
+   5.51,
+   5.63
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Wreck_Hull_B",
+  "note": "Broken engine pod wreck (~5 m)",
+  "tris": 272,
+  "size": [
+   3.04,
+   3.2,
+   4.8
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Bridge_Section",
+  "note": "Bridge section 4 m long, 3 m wide, deck top at y=0 (tiles on X)",
+  "tris": 464,
+  "size": [
+   4.0,
+   1.62,
+   3.08
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Bridge_Section_Weak",
+  "note": "Weak bridge section: cracked panels + warning light",
+  "tris": 640,
+  "size": [
+   4.01,
+   1.79,
+   3.25
+  ]
+ },
+ {
+  "category": "Stage1",
+  "name": "Bridge_End_Broken",
+  "note": "Broken bridge end with torn deck",
+  "tris": 468,
+  "size": [
+   4.08,
+   1.95,
+   3.24
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Station_Floor_4x4",
+  "note": "Station floor tile 4x4 m with light seams, top at y=0",
+  "tris": 232,
+  "size": [
+   4.0,
+   0.41,
+   4.0
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Station_Floor_Hazard",
+  "note": "Station floor 4x4 with hazard border (lift / danger area)",
+  "tris": 520,
+  "size": [
+   4.0,
+   0.43,
+   4.0
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Station_Wall_4x4",
+  "note": "Station wall panel 4x4 m (front faces -Z)",
+  "tris": 256,
+  "size": [
+   4.0,
+   4.0,
+   0.65
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Station_Wall_Window",
+  "note": "Station wall with window to the orange sky",
+  "tris": 196,
+  "size": [
+   4.0,
+   4.0,
+   0.67
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Station_Pillar",
+  "note": "Station support pillar 4 m",
+  "tris": 164,
+  "size": [
+   1.39,
+   4.0,
+   1.39
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Cargo_Lift",
+  "note": "Cargo lift 4x4 m with corner posts, deck top at y=0",
+  "tris": 1240,
+  "size": [
+   4.3,
+   7.64,
+   4.3
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Relay_Console_A",
+  "note": "Power relay console - cyan (relay 1)",
+  "tris": 160,
+  "size": [
+   1.32,
+   2.75,
+   1.02
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Relay_Console_B",
+  "note": "Power relay console - violet (relay 2)",
+  "tris": 160,
+  "size": [
+   1.32,
+   2.75,
+   1.02
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Relay_Console_C",
+  "note": "Power relay console - orange (relay 3)",
+  "tris": 160,
+  "size": [
+   1.32,
+   2.75,
+   1.02
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Power_Node",
+  "note": "Power node pylon with socket",
+  "tris": 140,
+  "size": [
+   1.56,
+   2.89,
+   1.8
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Power_Cell",
+  "note": "Power cell (carry / float into socket)",
+  "tris": 152,
+  "size": [
+   0.59,
+   1.2,
+   0.59
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Vault_Door",
+  "note": "Engine vault door (octagon, 6.4 m) - pivot bottom-centre",
+  "tris": 428,
+  "size": [
+   9.6,
+   8.0,
+   2.17
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Vault_LockBar",
+  "note": "Heavy vault locking bar 7 m",
+  "tris": 252,
+  "size": [
+   7.4,
+   0.8,
+   0.8
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Handrail_4m",
+  "note": "Handrail 4 m",
+  "tris": 108,
+  "size": [
+   4.04,
+   1.18,
+   0.24
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Pipe_Bundle_4m",
+  "note": "Pipe bundle 4 m with brackets (along X)",
+  "tris": 304,
+  "size": [
+   4.0,
+   1.2,
+   1.03
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Pipe_Elbow",
+  "note": "Pipe elbow joint",
+  "tris": 140,
+  "size": [
+   1.57,
+   1.57,
+   0.55
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Shield_Panel",
+  "note": "Floating shield panel (hex)",
+  "tris": 124,
+  "size": [
+   2.34,
+   2.65,
+   0.29
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Magnetic_Track_4m",
+  "note": "Magnetic cargo track 4 m (tiles on X)",
+  "tris": 96,
+  "size": [
+   4.0,
+   0.37,
+   1.6
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Cargo_Container",
+  "note": "Big cargo container 6 m (teal)",
+  "tris": 200,
+  "size": [
+   6.08,
+   2.7,
+   2.72
+  ]
+ },
+ {
+  "category": "Stage2",
+  "name": "Server_Rack",
+  "note": "Server rack - running machinery with blinking lights",
+  "tris": 356,
+  "size": [
+   1.04,
+   2.35,
+   0.89
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Engine_Core",
+  "note": "Replacement engine (3 m) - the objective, pivot bottom-centre",
+  "tris": 720,
+  "size": [
+   3.92,
+   1.9,
+   1.96
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Engine_Carrier",
+  "note": "Hover carrier sled for the engine (engine sits at y=0.75)",
+  "tris": 572,
+  "size": [
+   4.14,
+   1.37,
+   2.32
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Ring_Walkway",
+  "note": "Rotating ring walkway (r 10 m), axis along Z, pivot at centre",
+  "tris": 1368,
+  "size": [
+   20.5,
+   20.5,
+   3.4
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Station_Chunk_A",
+  "note": "Collapsing station chunk: torn walls + girder",
+  "tris": 932,
+  "size": [
+   9.76,
+   5.43,
+   4.22
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Station_Chunk_B",
+  "note": "Collapsing station chunk: split floor + hanging cable",
+  "tris": 1076,
+  "size": [
+   7.98,
+   5.84,
+   5.01
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Debris_Plate_A",
+  "note": "Flying debris plate A (debris storm)",
+  "tris": 60,
+  "size": [
+   2.32,
+   0.83,
+   1.85
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Debris_Plate_B",
+  "note": "Flying debris plate B (debris storm)",
+  "tris": 52,
+  "size": [
+   2.26,
+   0.86,
+   1.89
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Docking_Platform",
+  "note": "Ship docking platform 10x6 m, top at y=0",
+  "tris": 1204,
+  "size": [
+   10.0,
+   5.01,
+   6.0
+  ]
+ },
+ {
+  "category": "Stage3",
+  "name": "Docking_Plug",
+  "note": "Docking cable plug (Player reconnects it)",
+  "tris": 96,
+  "size": [
+   0.48,
+   2.75,
+   0.48
+  ]
+ }
+]
