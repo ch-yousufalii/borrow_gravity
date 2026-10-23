@@ -8,8 +8,8 @@ namespace BorrowGravity
     /// </summary>
     public enum MoveStyle { Joystick, Arrows }
 
-    /// <summary>Third person (behind the player) or the side-on view that shows the level from the side.</summary>
-    public enum CameraView { ThirdPerson, Side }
+    /// <summary>Follow (close behind the player, default), third person (wider chase camera) or the side-on view that shows the level from the side.</summary>
+    public enum CameraView { Follow, ThirdPerson, Side }
 
     public static class ControlSettings
     {
@@ -17,12 +17,13 @@ namespace BorrowGravity
         public const float MinSens = 0.5f, MaxSens = 2.5f, SensStep = 0.1f;
         public const float DeadZone = 0.1f;
 
-        const string KeyButton = "bg_btn_size", KeyStick = "bg_stick_size", KeyStickSens = "bg_stick_sens", KeyLook = "bg_look_sens", KeyStyle = "bg_move_style", KeyView = "bg_cam_view";
+        // KeyView is a new key (v2) so old saved camera choices don't override the new Follow default
+        const string KeyButton = "bg_btn_size", KeyStick = "bg_stick_size", KeyStickSens = "bg_stick_sens", KeyLook = "bg_look_sens", KeyStyle = "bg_move_style", KeyView = "bg_cam_view_v2";
 
         static bool loaded;
         static float buttonSize = 1f, stickSize = 1f, stickSensitivity = 1f, lookSensitivity = 1f;
         static MoveStyle moveStyle = MoveStyle.Joystick;
-        static CameraView view = CameraView.ThirdPerson;
+        static CameraView view = CameraView.Follow;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => loaded = false;
@@ -36,10 +37,11 @@ namespace BorrowGravity
             stickSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyStickSens, 1f), MinSens, MaxSens);
             lookSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyLook, 1f), MinSens, MaxSens);
             moveStyle = PlayerPrefs.GetInt(KeyStyle, 0) == 1 ? MoveStyle.Arrows : MoveStyle.Joystick;
-            view = PlayerPrefs.GetInt(KeyView, 0) == 1 ? CameraView.Side : CameraView.ThirdPerson;
+            int v = Mathf.Clamp(PlayerPrefs.GetInt(KeyView, (int)CameraView.Follow), 0, 2);
+            view = (CameraView)v;
         }
 
-        /// <summary>Camera: third person (default) or side view. Chosen in the pause menu, per device.</summary>
+        /// <summary>Camera: Follow (default), third person or side view. Chosen in the pause menu, per device.</summary>
         public static CameraView View { get { Load(); return view; } set { Load(); view = value; Save(); } }
 
         /// <summary>Touch movement: floating joystick (left half of the screen) or four arrow buttons.</summary>
@@ -63,7 +65,7 @@ namespace BorrowGravity
             PlayerPrefs.SetFloat(KeyStickSens, stickSensitivity);
             PlayerPrefs.SetFloat(KeyLook, lookSensitivity);
             PlayerPrefs.SetInt(KeyStyle, moveStyle == MoveStyle.Arrows ? 1 : 0);
-            PlayerPrefs.SetInt(KeyView, view == CameraView.Side ? 1 : 0);
+            PlayerPrefs.SetInt(KeyView, (int)view);
             PlayerPrefs.Save();
         }
 

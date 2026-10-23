@@ -3,10 +3,13 @@ using UnityEngine;
 namespace BorrowGravity
 {
     /// <summary>
-    /// Each player's own camera, with shake. Default: third-person chase camera behind and above the player that
-    /// slowly turns to follow where they walk (not when they step sideways), stays out of walls and follows the
-    /// player's gravity "up" onto walls, ceilings and the ring. With thirdPerson off it is the older side-on camera
-    /// that frames all targets.
+    /// Each player's own camera, with shake. Three views (picked in the pause menu via ControlSettings.View):
+    ///  - Follow (default): close camera just behind the player, player stays visible, view is mostly ahead.
+    ///  - ThirdPerson: the original wider chase camera behind and above the player.
+    ///  - Side: the older side-on camera that frames all targets.
+    /// Follow and ThirdPerson both slowly turn to follow where the player walks (not when they step sideways),
+    /// stay out of walls and follow the player's gravity "up" onto walls, ceilings and the ring.
+    /// With thirdPerson off it is always the side-on camera.
     /// </summary>
     public class CoopCamera : MonoBehaviour
     {
@@ -23,6 +26,16 @@ namespace BorrowGravity
         public float maxExtraDistance = 18f;
         public float minFocusY = -6f;
         public float smoothTime = 0.35f;
+
+        [Header("Follow view (default): close behind the player")]
+        [Tooltip("How far behind the player the camera sits.")]
+        public float followDistance = 3.4f;
+        [Tooltip("Camera height above the player's feet.")]
+        public float followHeight = 1.7f;
+        [Tooltip("Height of the point the camera looks at (player's upper body).")]
+        public float followLookHeight = 1.5f;
+        [Tooltip("How far in front of the player the camera aims, so you see what is ahead.")]
+        public float followLookAhead = 8f;
 
         [Header("Third person")]
         public bool thirdPerson = true;
@@ -71,10 +84,15 @@ namespace BorrowGravity
 
         void LateUpdate()
         {
-            // the pause menu can switch between third person and the side view at any time
+            // the pause menu can switch between Follow, third person and the side view at any time
             var view = thirdPerson ? ControlSettings.View : CameraView.Side;
-            if (view != shownView) { shownView = view; initialised = false; }
-            if (view == CameraView.ThirdPerson && FollowPlayer()) return;
+            if (view != shownView)
+            {
+                shownView = view;
+                initialised = false;
+                pitch = float.NaN; // re-pick the tilt that suits the new view
+            }
+            if ((view == CameraView.Follow || view == CameraView.ThirdPerson) && FollowPlayer()) return;
             if (!TryGetBounds(out Bounds b)) return;
             Vector3 c = b.center + focusOffset;
             c.y = Mathf.Max(c.y, minFocusY);
@@ -108,6 +126,13 @@ namespace BorrowGravity
             float dt = Time.deltaTime;
             Vector3 up = player != null ? player.Up : Vector3.up;
 
+            // pick the numbers for the current view: close Follow camera or the wider third person one
+            bool close = shownView == CameraView.Follow;
+            float vDistance = close ? followDistance : distance;
+            float vHeight = close ? followHeight : height;
+            float vLookHeight = close ? followLookHeight : lookHeight;
+            float vLookAhead = close ? followLookAhead : lookAhead;
+
             if (!initialised)
             {
                 camUp = up;
@@ -116,8 +141,8 @@ namespace BorrowGravity
                 heading.Normalize();
                 lastTargetPos = t.position;
             }
-            float dist = Mathf.Sqrt(distance * distance + (height - lookHeight) * (height - lookHeight));
-            if (float.IsNaN(pitch)) pitch = Mathf.Atan2(height - lookHeight, distance) * Mathf.Rad2Deg;
+            float dist = Mathf.Sqrt(vDistance * vDistance + (vHeight - vLookHeight) * (vHeight - vLookHeight));
+            if (float.IsNaN(pitch)) pitch = Mathf.Atan2(vHeight - vLookHeight, vDistance) * Mathf.Rad2Deg;
             // gravity changes swing the camera's up smoothly (walls, ceilings, the ring)
             camUp = Vector3.Slerp(camUp, up, 1f - Mathf.Exp(-5f * dt)).normalized;
             Vector3 h = Vector3.ProjectOnPlane(heading, camUp);
@@ -144,11 +169,11 @@ namespace BorrowGravity
                 && Vector3.Dot(move.normalized, heading) > 0.35f)
                 heading = Vector3.Slerp(heading, move.normalized, 1f - Mathf.Exp(-followRate * move.magnitude * dt)).normalized;
 
-            Vector3 pivot = t.position + camUp * lookHeight;
+            Vector3 pivot = t.position + camUp * vLookHeight;
             float pr = pitch * Mathf.Deg2Rad;
             Vector3 desired = pivot + (-heading * Mathf.Cos(pr) + camUp * Mathf.Sin(pr)) * dist;
             desired = AvoidWalls(pivot, desired, t);
-            Vector3 look = pivot + heading * lookAhead;
+            Vector3 look = pivot + heading * vLookAhead;
 
             if (!initialised)
             {

@@ -145,6 +145,8 @@ namespace BorrowGravity
             DrawWorldMarkers();
             DrawPanels(w);
             DrawPauseButton(w, sm);
+            DrawPauseButton(w, sm);
+            DrawCameraButton(w, sm);   // <-- nayi line
             // the centre banners stack top-down in this order, so two at once never overlap
             slot = 74f;
             DrawEngine(w, h);
@@ -506,7 +508,26 @@ namespace BorrowGravity
             UIKit.Fill(new Rect(r.center.x + 3, r.y + 13, 4, 16), MenuStyle.White(1f));
             if (hover && Event.current.type == EventType.MouseDown) { Event.current.Use(); sm.TogglePause(); }
         }
-
+        /// <summary>Camera switch button on the gameplay screen, next to the pause button.</summary>
+        /// <summary>Camera switch button on the gameplay screen, next to the pause button.</summary>
+        void DrawCameraButton(float w, StageManager sm)
+        {
+            if (sm == null || sm.State != StageState.Playing) return;
+            var r = new Rect(w * 0.5f + 33f, 18, 42, 42); // pause button ke daayein taraf
+            bool hover = r.Contains(Event.current.mousePosition);
+            MenuStyle.Box(r, hover ? 1f : MenuStyle.W50, 1f);
+            // chhota camera icon: body + lens
+            MenuStyle.Box(new Rect(r.x + 9, r.y + 14, 24, 17), MenuStyle.W80, 1f);
+            MenuStyle.Box(new Rect(r.center.x - 4, r.y + 18, 8, 8), 1f, 1f, 4f);
+            // button ke neeche current view ka chhota label
+            string view = ControlSettings.View == CameraView.ThirdPerson ? "3RD PERSON" : "SIDE VIEW";
+            MenuStyle.Text(new Rect(r.x - 30, r.yMax + 4, r.width + 60, 12), view, UIKit.Face.Heavy, 9, MenuStyle.W50, 0.2f, TextAnchor.UpperCenter);
+            if (hover && Event.current.type == EventType.MouseDown)
+            {
+                Event.current.Use();
+                sm.ChoosePauseItem(4); // pause menu ka "Camera" item (index 4)
+            }
+        }
         void DrawHelp(float w, float h, StageManager sm)
         {
             if (sm != null && sm.ResetHold > 0f)
@@ -610,7 +631,8 @@ namespace BorrowGravity
 
         static readonly string[] StageHints =
         {
-            "Learn to bend gravity together.", "Flip the station, find the engine.", "Carry the engine home — fast."
+            "Learn to bend gravity together.", "Flip the station, find the engine.", "Carry the engine home — fast.",
+            "Cross the eclipse before the light goes out."
         };
 
         /// <summary>
@@ -629,7 +651,7 @@ namespace BorrowGravity
             MenuStyle.Box(new Rect(0f, 0f, 116f, 116f), MenuStyle.W50, 1f, 58f);
             GUI.EndGroup();
 
-            int n = Mathf.Clamp(sm.stageNumber, 1, 3);
+            int n = Mathf.Clamp(sm.stageNumber, 1, StageHints.Length);
             MenuStyle.ShadowAlpha = 0.8f; // transparent card over the live game: stronger shadow for legibility
             string sub = sm.stageTitle.Contains("—") ? sm.stageTitle.Substring(sm.stageTitle.IndexOf('—') + 1).Trim() : sm.stageTitle;
             float lx = box.x + bw * 0.06f, lw = bw * 0.5f, y = box.y + 34f;
@@ -641,7 +663,7 @@ namespace BorrowGravity
             y += 30f;
             MenuStyle.Text(new Rect(lx, y, 100f, 12f), "DIFFICULTY", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.UpperLeft);
             float px = lx + MenuStyle.Measure("DIFFICULTY", UIKit.Face.Heavy, 10, 0.3f) + 12f;
-            for (int p = 1; p <= 3; p++)
+            for (int p = 1; p <= StageHints.Length; p++)
             {
                 var pip = new Rect(px + (p - 1) * 27f, y + 5f, 22f, 3f);
                 if (p <= n) UIKit.Fill(pip, MenuStyle.White(1f));
@@ -690,6 +712,7 @@ namespace BorrowGravity
             ("REACH THE STATION", "Cross the shattered orbit and step into the beacon at the station airlock."),
             ("FIND THE ENGINE VAULT", "Make it through the upside-down station — the vault waits at the far end."),
             ("GET BACK TO THE SHIP", "The station is falling apart. Carry the engine home before it's gone."),
+            ("CROSS THE EVENT HORIZON", "The eclipse is bending gravity. Carry each other through before the light goes out."),
         };
 
         void DrawMission(float w, float h, StageManager sm)

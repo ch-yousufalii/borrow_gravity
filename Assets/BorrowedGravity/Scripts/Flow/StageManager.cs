@@ -195,15 +195,24 @@ namespace BorrowGravity
         const int SettingsItem = 3, CameraItem = 4;
 
         /// <summary>What a pause item reads (the camera item shows the current view).</summary>
-        public static string PauseLabel(int i) =>
-            i == CameraItem ? (ControlSettings.View == CameraView.ThirdPerson ? "Camera · Third person" : "Camera · Side view") : PauseItems[i];
+        public static string PauseLabel(int i)
+        {
+            if (i != CameraItem) return PauseItems[i];
+            switch (ControlSettings.View)
+            {
+                case CameraView.Follow: return "Camera · Follow";
+                case CameraView.ThirdPerson: return "Camera · Third person";
+                default: return "Camera · Side view";
+            }
+        }
 
         public void ChoosePauseItem(int i)
         {
             if (i == SettingsItem) { GameUI.SettingsOpen = true; return; } // per device, never sent to the host
             if (i == CameraItem)
             {
-                ControlSettings.View = ControlSettings.View == CameraView.ThirdPerson ? CameraView.Side : CameraView.ThirdPerson;
+                // cycle: Follow -> Third person -> Side view -> Follow
+                ControlSettings.View = (CameraView)(((int)ControlSettings.View + 1) % 3);
                 Sfx.Play(SfxId.Tick, 0.7f, 1.2f);
                 return;
             }
