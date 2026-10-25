@@ -108935,16 +108935,16 @@ MonoBehaviour:
     duration: 3
     fromPos: {x: 165, y: 2.4, z: 4.8}
     toPos: {x: 165, y: 7, z: 4.8}
-    fromEuler: {x: -0, y: 90, z: -0}
-    toEuler: {x: -6, y: 90, z: 0}
+    fromEuler: {x: 0, y: 270, z: 0}
+    toEuler: {x: 6, y: 270, z: 0}
     walk: 0
   - actor: {fileID: 1634731818}
     time: 19
     duration: 6
     fromPos: {x: 165, y: 7, z: 4.8}
     toPos: {x: 330, y: 62, z: 60}
-    fromEuler: {x: -6, y: 90, z: 0}
-    toEuler: {x: -14, y: 70, z: 8}
+    fromEuler: {x: 6, y: 270, z: 0}
+    toEuler: {x: 14.033923, y: 251.50256, z: 0}
     walk: 0
   - actor: {fileID: 472029291}
     time: 0.35
@@ -163136,7 +163136,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8763445909496550793, guid: 19a1dea4b27f7a0a8b85b3ede24e1f1d, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.7071068
+      value: -0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: 8763445909496550793, guid: 19a1dea4b27f7a0a8b85b3ede24e1f1d, type: 3}
       propertyPath: m_LocalRotation.x
