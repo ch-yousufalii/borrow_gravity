@@ -103,7 +103,8 @@ namespace BorrowGravity
         Rigidbody rb;
         CapsuleCollider col;
         GravityAffected grav;
-        Camera cam;
+        Camera cam, camRigOf;
+        CoopCamera camRig;
         int airJumpsLeft;
         float jumpBuffer, lastGroundedTime = -1f, invulnerableUntil, stunnedUntil, lastPushTime = -1f;
         Vector3 spawnPosition;
@@ -140,8 +141,17 @@ namespace BorrowGravity
         /// <summary>Online: the keyboard only drives this device's own player (the other one is driven over the network).</summary>
         bool KeyboardDrives => !NetSession.Online || playerIndex == NetSession.LocalPlayer;
 
-        /// <summary>Online each device has one player, so the other player's keys (arrows / R-Ctrl / R-Shift) work too.</summary>
-        PlayerKeys AltKeys => NetSession.Online && playerIndex == NetSession.LocalPlayer ? Players.Get(1 - playerIndex)?.keys : null;
+        /// <summary>Online each device has one player, so the other player's keys (arrows / R-Ctrl / R-Shift) work too;
+        /// solo, the one astronaut also moves with the arrows (Enter / R-Ctrl jump, R-Shift gravity).</summary>
+        PlayerKeys AltKeys => NetSession.Online
+            ? (playerIndex == NetSession.LocalPlayer ? Players.Get(1 - playerIndex)?.keys : null)
+            : (GameFlow.Solo && playerIndex == 0 ? SoloArrows : null);
+
+        static readonly PlayerKeys SoloArrows = new PlayerKeys
+        {
+            up = Key.UpArrow, down = Key.DownArrow, left = Key.LeftArrow, right = Key.RightArrow,
+            jump = Key.RightCtrl, jumpAlt = Key.Enter, power = Key.RightShift, power2 = Key.None
+        };
 
         /// <summary>Joining phone: the host simulates this player; mirror its pose flags for the suit animation.</summary>
         public void SetRemoteFlags(bool pushing, bool carrying)
@@ -200,6 +210,14 @@ namespace BorrowGravity
             if (forward.sqrMagnitude < 0.04f) forward = Vector3.ProjectOnPlane(camUp, up);
             forward.Normalize();
             right = Vector3.Cross(up, forward).normalized;
+            // side view: keep sideways moves on the level's lane, or the camera's look-ahead turn and downward tilt
+            // steer you off narrow walkways (rings, hex steps) — especially when gravity is tilted
+            if (cam != null && cam != camRigOf) { camRigOf = cam; camRig = cam.GetComponent<CoopCamera>(); }
+            if (cam != null && camRig != null && camRig.SideFraming)
+            {
+                Vector3 flat = Vector3.ProjectOnPlane(right, camRig.SideDepthAxis);
+                if (flat.sqrMagnitude > 0.04f) right = flat.normalized;
+            }
         }
 
         void FixedUpdate()

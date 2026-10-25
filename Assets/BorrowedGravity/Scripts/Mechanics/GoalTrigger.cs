@@ -3,10 +3,11 @@ using UnityEngine;
 
 namespace BorrowGravity
 {
-    /// <summary>Completes the stage when enough players (1 = anyone) are inside, and the optional condition is on.</summary>
+    /// <summary>Completes the stage when every player in the game is inside, and the optional condition is on.</summary>
     [RequireComponent(typeof(Collider))]
     public class GoalTrigger : MonoBehaviour
     {
+        [Tooltip("Ignored: everyone in the game has to reach the goal.")]
         public int requiredPlayers = 1;
         public SignalSource extraCondition;
         public string waitingForPartner = "Waiting for your partner...";
@@ -35,7 +36,7 @@ namespace BorrowGravity
             if (done) return;
             inside.RemoveWhere(p => p == null);
             if (inside.Count == 0) return;
-            bool players = inside.Count >= Mathf.Clamp(requiredPlayers, 1, Mathf.Max(1, Players.All.Count));
+            bool players = inside.Count >= Mathf.Max(1, Players.All.Count);
             bool condition = extraCondition == null || extraCondition.IsOn;
             if (players && condition)
             {

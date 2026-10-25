@@ -13,7 +13,7 @@ namespace BorrowGravity
         public static readonly Color Void = Hex(0x140a1f), PanelCol = Hex(0x1f1230), Line = Hex(0x3a2650);
         public static readonly Color Ink = Hex(0xf4e9f1), Dim = Hex(0xb49ec4), Sun = Hex(0xff9d5c), Glow = Hex(0x5ce1ff);
         public static readonly Color Danger = Hex(0xff6a7a), Good = Hex(0x7dffb0), Selected = Hex(0x2a1940);
-        public const float ReferenceHeight = 900f;
+        public const float ReferenceHeight = 780f; // lower = bigger UI everywhere (was 900)
 
         public static float Scale { get; private set; } = 1f;
         public static float Width => Screen.width / Scale;

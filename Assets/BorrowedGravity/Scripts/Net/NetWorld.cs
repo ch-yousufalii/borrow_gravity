@@ -92,11 +92,24 @@ namespace BorrowGravity
                 sentLight[i] = lights[i] != null ? lights[i].intensity : 0f;
             }
             nextSpawnId = n;
+            ComputeFingerprint();
             zones = FindObjectsByType<GravityZone>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             System.Array.Sort(zones, (a, b) => Index(a.transform).CompareTo(Index(b.transform)));
 
             SetupScreens();
             if (NetSession.IsClient) MakePuppet(scene);
+        }
+
+        /// <summary>Same on two devices only when both run the same build of the scene (objects are matched by order).</summary>
+        uint fingerprint;
+
+        void ComputeFingerprint()
+        {
+            uint h = 2166136261u;
+            void Mix(int v) { h = (h ^ (uint)v) * 16777619u; }
+            Mix(list.Count);
+            foreach (var t in list) foreach (char c in t.name) Mix(c); // own hash: string.GetHashCode differs between runtimes
+            fingerprint = h;
         }
 
         int Index(Transform t) => t != null && indexOf.TryGetValue(t, out int i) ? i : -1;
@@ -197,6 +210,7 @@ namespace BorrowGravity
         {
             packet = NetSession.Write(NetMsg.World);
             packet.Write((ushort)0); // entry count, patched on flush
+            packet.Write(fingerprint);
             packetCount = 0;
         }
 
@@ -329,6 +343,12 @@ namespace BorrowGravity
         public void ReadWorld(BinaryReader r)
         {
             int count = r.ReadUInt16();
+            if (r.ReadUInt32() != fingerprint)
+            {
+                // a different build of the game: every update would land on the wrong object
+                NetSession.VersionMismatch();
+                return;
+            }
             for (int k = 0; k < count; k++)
             {
                 int i = r.ReadInt32();

@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 namespace BorrowGravity
 {
     /// <summary>
-    /// Phone rooms for 2-4 players with no server of our own: the host creates a room (an internet code through Unity
+    /// Phone rooms for two players with no server of our own: the host creates a room (an internet code through Unity
     /// Relay, or a 4-digit same-Wi-Fi code found by UDP broadcast), the others type it in. The host runs the whole game
     /// and plays A; each guest gets the next letter (B, C, D), sends its controls and mirrors the host's world
     /// (<see cref="NetWorld"/>), HUD and sounds. Offline (the default) nothing here runs.
@@ -378,6 +378,10 @@ namespace BorrowGravity
             nextSweep = now + 1.5f;
             foreach (var e in SubnetTargets()) SendTo(e);
         }
+
+        /// <summary>Client: the host runs a different build, so its world updates can't be shown here.</summary>
+        public static void VersionMismatch() =>
+            Lose("The host has a different version of the game. Install the same build on both devices.");
 
         static void Lose(string why)
         {

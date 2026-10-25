@@ -11,7 +11,11 @@ namespace BorrowGravity
     /// </summary>
     public class VirtualControls : MonoBehaviour
     {
+        /// <summary>On-screen controls: shown on phones and in the editor, hidden in PC builds (keyboard play); J toggles.</summary>
         public static bool Visible = true;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Visible = Application.isMobilePlatform || Application.isEditor;
 
         public HudIcons icons;
         public float stickRadius = 70f;
