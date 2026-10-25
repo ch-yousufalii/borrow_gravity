@@ -34,7 +34,13 @@ namespace BorrowGravity.EditorTools
             var dock = ctx.Piece("7.8", "Docking_Platform");
             if (dock != null) dock.transform.position = new Vector3(164f, -0.2f, 0f);
             var shipPos = new Vector3(165f, 2.4f, 4.8f);
-            var ship = Spawn("Spaceship", shipPos, shipEuler, root, shipScale, "HeroShip");
+            // the model's nose is its local -z (the engine sits at +z): turn it round so it flies away nose first
+            var heroEuler = shipEuler + new Vector3(0f, 180f, 0f);
+            var awayTo = new Vector3(330f, 62f, 60f);
+            var away = awayTo - (shipPos + new Vector3(0f, 4.6f, 0f));
+            var awayEuler = new Vector3(Mathf.Atan2(away.y, new Vector2(away.x, away.z).magnitude) * Mathf.Rad2Deg * 0.8f,
+                                        Mathf.Atan2(away.x, away.z) * Mathf.Rad2Deg + 180f, 0f);
+            var ship = Spawn("Spaceship", shipPos, heroEuler, root, shipScale, "HeroShip");
             NoColliders(ship);
             var trail = Particles(ship.transform, "EngineTrail", new Vector3(0f, 0.6f, 6.2f), Kind.Trail);
             var blast = Particles(ship.transform, "EngineBlast", new Vector3(0f, 0.8f, 5.6f), Kind.Explosion);
@@ -108,8 +114,8 @@ namespace BorrowGravity.EditorTools
             Move(cs, a, 12f, 2.6f, new Vector3(160.8f, deckY, -0.1f), new Vector3(164.2f, deckY, 2.8f), new Vector3(0, 70, 0), new Vector3(0, 20, 0), true);
             Move(cs, b, 12.3f, 2.4f, new Vector3(161.6f, deckY, 1.3f), new Vector3(165.8f, deckY, 2.8f), new Vector3(0, 140, 0), new Vector3(0, 340, 0), true);
             // lift-off and away
-            Move(cs, ship.transform, 16f, 3f, shipPos, shipPos + new Vector3(0f, 4.6f, 0f), shipEuler, shipEuler + new Vector3(-6f, 0f, 0f));
-            Move(cs, ship.transform, 19f, 6f, shipPos + new Vector3(0f, 4.6f, 0f), new Vector3(330f, 62f, 60f), shipEuler + new Vector3(-6f, 0f, 0f), shipEuler + new Vector3(-14f, -20f, 8f));
+            Move(cs, ship.transform, 16f, 3f, shipPos, shipPos + new Vector3(0f, 4.6f, 0f), heroEuler, heroEuler + new Vector3(6f, 0f, 0f));
+            Move(cs, ship.transform, 19f, 6f, shipPos + new Vector3(0f, 4.6f, 0f), awayTo, heroEuler + new Vector3(6f, 0f, 0f), awayEuler);
 
             Cue(cs, 0f, CueType.Deactivate, trail);
             Cue(cs, 0f, CueType.Deactivate, engineGlow.gameObject);
