@@ -93,6 +93,7 @@ namespace BorrowGravity
                         SetState(StageState.Paused);
                         break;
                     }
+                    if (PlayerKeys.Pressed(UnityEngine.InputSystem.Key.C)) CycleCamera(); // same as the camera button
                     if (PlayerKeys.Held(UnityEngine.InputSystem.Key.R))
                     {
                         ResetHold += Time.deltaTime;
@@ -139,6 +140,7 @@ namespace BorrowGravity
                 case StageState.Playing:
                     if (PlayerKeys.Pressed(UnityEngine.InputSystem.Key.Escape) || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.P))
                         NetSession.SendAction(NetAction.Pause);
+                    if (PlayerKeys.Pressed(UnityEngine.InputSystem.Key.C)) CycleCamera(); // same as the camera button
                     if (PlayerKeys.Held(UnityEngine.InputSystem.Key.R))
                     {
                         ResetHold += Time.deltaTime;
@@ -191,31 +193,21 @@ namespace BorrowGravity
                 || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.NumpadEnter) || PlayerKeys.Pressed(UnityEngine.InputSystem.Key.RightCtrl);
         }
 
-        public static readonly string[] PauseItems = { "Resume", "Restart from checkpoint", "Restart stage", "Settings", "Camera", "Main menu" };
-        const int SettingsItem = 3, CameraItem = 4;
+        public static readonly string[] PauseItems = { "Resume", "Restart from checkpoint", "Restart stage", "Settings", "Main menu" };
+        const int SettingsItem = 3;
 
-        /// <summary>What a pause item reads (the camera item shows the current view).</summary>
-        public static string PauseLabel(int i)
+        public static string PauseLabel(int i) => PauseItems[i];
+
+        /// <summary>The camera button on the gameplay screen: Follow -> Third person -> Side view -> Follow (per device).</summary>
+        public static void CycleCamera()
         {
-            if (i != CameraItem) return PauseItems[i];
-            switch (ControlSettings.View)
-            {
-                case CameraView.Follow: return "Camera · Follow";
-                case CameraView.ThirdPerson: return "Camera · Third person";
-                default: return "Camera · Side view";
-            }
+            ControlSettings.View = (CameraView)(((int)ControlSettings.View + 1) % 3);
+            Sfx.Play(SfxId.Tick, 0.7f, 1.2f);
         }
 
         public void ChoosePauseItem(int i)
         {
             if (i == SettingsItem) { GameUI.SettingsOpen = true; return; } // per device, never sent to the host
-            if (i == CameraItem)
-            {
-                // cycle: Follow -> Third person -> Side view -> Follow
-                ControlSettings.View = (CameraView)(((int)ControlSettings.View + 1) % 3);
-                Sfx.Play(SfxId.Tick, 0.7f, 1.2f);
-                return;
-            }
             if (NetSession.IsClient) { NetSession.SendAction(NetAction.PauseItem, i); return; }
             switch (i)
             {
@@ -228,10 +220,11 @@ namespace BorrowGravity
 
         public void Resume() => SetState(StageState.Playing);
 
-        /// <summary>Both players back to the active checkpoint; puzzles from that section on return to their start state.</summary>
+        /// <summary>Each player back to their own checkpoint; puzzles from the earlier one's section on return to their start state.</summary>
         public void ResetToCheckpoint()
         {
-            int section = Checkpoint.Active != null ? Checkpoint.Active.section : 0;
+            var earliest = Checkpoint.Earliest; // each player goes back to their own checkpoint
+            int section = earliest != null ? earliest.section : 0;
             foreach (var mb in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
                 if (mb is IResettable r && r.Section >= section && !(mb is EngineCarrier)) r.ResetState();
             if (EngineCarrier.Instance != null) EngineCarrier.Instance.ResetState();

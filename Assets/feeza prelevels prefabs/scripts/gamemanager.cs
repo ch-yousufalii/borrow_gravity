@@ -54,7 +54,7 @@ public class GameManager : MonoBehaviour
         {
             style = new GUIStyle(GUI.skin.label);
             style.fontSize = 48;
-            style.alignment = TextAlignment.Center == TextAlignment.Center ? TextAnchor.MiddleCenter : TextAnchor.MiddleCenter;
+            style.alignment = TextAnchor.MiddleCenter;
             style.normal.textColor = Color.red;
         }
         GUI.Label(new Rect(0, 0, Screen.width, Screen.height),

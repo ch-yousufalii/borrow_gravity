@@ -3,8 +3,8 @@ using UnityEngine;
 namespace BorrowGravity
 {
     /// <summary>
-    /// Player-adjustable control settings, saved on this device: on-screen button size, joystick size, joystick
-    /// sensitivity (how far you drag for full speed) and camera-look sensitivity (finger drag / mouse).
+    /// Control settings, saved on this device: on-screen joystick or arrow buttons, and the camera view. Button / joystick
+    /// size and sensitivities are fixed at 1 (one size that suits every screen).
     /// </summary>
     public enum MoveStyle { Joystick, Arrows }
 
@@ -32,10 +32,8 @@ namespace BorrowGravity
         {
             if (loaded) return;
             loaded = true;
-            buttonSize = Mathf.Clamp(PlayerPrefs.GetFloat(KeyButton, 1f), MinSize, MaxSize);
-            stickSize = Mathf.Clamp(PlayerPrefs.GetFloat(KeyStick, 1f), MinSize, MaxSize);
-            stickSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyStickSens, 1f), MinSens, MaxSens);
-            lookSensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(KeyLook, 1f), MinSens, MaxSens);
+            // one size for everyone: the old size / sensitivity choices are no longer offered, so saved ones are ignored
+            buttonSize = stickSize = stickSensitivity = lookSensitivity = 1f;
             moveStyle = PlayerPrefs.GetInt(KeyStyle, 0) == 1 ? MoveStyle.Arrows : MoveStyle.Joystick;
             int v = Mathf.Clamp(PlayerPrefs.GetInt(KeyView, (int)CameraView.Follow), 0, 2);
             view = (CameraView)v;

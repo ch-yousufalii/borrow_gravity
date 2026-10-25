@@ -299,7 +299,7 @@ namespace BorrowGravity.EditorTools
                 "all the way back to your ship: across collapsing bridges, falling cables and a gravity ring.\n\nBoth halves must be installed to fly home.",
                 "ENGINE ONLINE",
                 "The new engine roars to life. With the station collapsing behind you, the ship breaks free and turns for home.\n\nThanks for playing BORROWED GRAVITY!",
-                -25f, final: true,
+                -25f, final: false,
                 times: new[] { TimeOfDay.At(TimeOfDay.Night(), 0f), TimeOfDay.At(TimeOfDay.Night(), 0.7f), TimeOfDay.At(TimeOfDay.Dawn(), 1f) },
                 routeStartX: 0f, routeEndX: 165f);
             Save(ctx, ScenePath);

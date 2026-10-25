@@ -82,6 +82,20 @@ namespace BorrowGravity
 
         CameraView shownView;
 
+        /// <summary>True while this camera frames the players from the side (not following one from behind).</summary>
+        public bool SideFraming { get; private set; }
+
+        /// <summary>Side view: the level's depth axis (where the camera sits back from), flat. The camera turns a
+        /// little to look ahead as you move; this axis doesn't, so sideways moves stay on the lane.</summary>
+        public Vector3 SideDepthAxis
+        {
+            get
+            {
+                var d = Vector3.ProjectOnPlane(-offset, Vector3.up);
+                return d.sqrMagnitude > 0.01f ? d.normalized : Vector3.forward;
+            }
+        }
+
         void LateUpdate()
         {
             // the pause menu can switch between Follow, third person and the side view at any time
@@ -92,7 +106,8 @@ namespace BorrowGravity
                 initialised = false;
                 pitch = float.NaN; // re-pick the tilt that suits the new view
             }
-            if ((view == CameraView.Follow || view == CameraView.ThirdPerson) && FollowPlayer()) return;
+            SideFraming = !((view == CameraView.Follow || view == CameraView.ThirdPerson) && FollowPlayer());
+            if (!SideFraming) return;
             if (!TryGetBounds(out Bounds b)) return;
             Vector3 c = b.center + focusOffset;
             c.y = Mathf.Max(c.y, minFocusY);

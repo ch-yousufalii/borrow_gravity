@@ -145,8 +145,7 @@ namespace BorrowGravity
             DrawWorldMarkers();
             DrawPanels(w);
             DrawPauseButton(w, sm);
-            DrawPauseButton(w, sm);
-            DrawCameraButton(w, sm);   // <-- nayi line
+            DrawCameraButton(w, sm);
             // the centre banners stack top-down in this order, so two at once never overlap
             slot = 74f;
             DrawEngine(w, h);
@@ -254,7 +253,19 @@ namespace BorrowGravity
 
         // ---------- HUD in the main-menu style: white hairlines and letter-spaced white text only ----------
 
-        static string ModeLabel(GravityMode m) => GravityZone.LabelFor(m).ToUpperInvariant();
+        /// <summary>Plain words for a zone's gravity: ON or OFF first, and which way only when it isn't the usual down.</summary>
+        static string ModeLabel(GravityMode m)
+        {
+            switch (m)
+            {
+                case GravityMode.Down: return "GRAVITY ON";
+                case GravityMode.Zero: return "GRAVITY OFF";
+                case GravityMode.Up: return "GRAVITY ON · UPSIDE DOWN";
+                case GravityMode.RadialIn: return "GRAVITY ON · TO RING";
+                case GravityMode.RadialOut: return "GRAVITY ON · OUTWARD";
+                default: return "GRAVITY ON · SIDEWAYS";
+            }
+        }
 
         /// <summary>A player's power panel: outline + brackets, a dotted cooldown ring with the letter, name and status.</summary>
         void PowerPanel(Rect panel, string letter, string role, float fill, bool activeGlow, string line1, string line2, bool ringRight)
@@ -302,7 +313,7 @@ namespace BorrowGravity
                 var zone = gp.Target;
                 info.role = "GRAVITY + NULLIFY";
                 info.fill = 1f - gp.CooldownFraction;
-                info.line1 = zone != null ? "E  " + zone.zoneName.ToUpperInvariant() + " · " + ModeLabel(zone.Mode) : "E  NO GRAVITY ZONE";
+                info.line1 = zone != null ? "E  " + ModeLabel(zone.Mode) : "E  NO ZONE NEARBY";
                 info.line2 = "Q  " + nullLine.ToLowerInvariant();
             }
             else if (g)
@@ -310,8 +321,8 @@ namespace BorrowGravity
                 var zone = gp.Target;
                 info.role = "GRAVITY CONTROLLER";
                 info.fill = 1f - gp.CooldownFraction;
-                info.line1 = zone != null ? zone.zoneName.ToUpperInvariant() + "  ·  " + ModeLabel(zone.Mode) : "NO GRAVITY ZONE IN RANGE";
-                info.line2 = zone != null ? "E · switch gravity" : "";
+                info.line1 = zone != null ? ModeLabel(zone.Mode) : "NO ZONE NEARBY";
+                info.line2 = zone != null ? "E · switch gravity on / off" : "";
             }
             else if (n)
             {
@@ -509,23 +520,22 @@ namespace BorrowGravity
             if (hover && Event.current.type == EventType.MouseDown) { Event.current.Use(); sm.TogglePause(); }
         }
         /// <summary>Camera switch button on the gameplay screen, next to the pause button.</summary>
-        /// <summary>Camera switch button on the gameplay screen, next to the pause button.</summary>
         void DrawCameraButton(float w, StageManager sm)
         {
             if (sm == null || sm.State != StageState.Playing) return;
-            var r = new Rect(w * 0.5f + 33f, 18, 42, 42); // pause button ke daayein taraf
+            var r = new Rect(w * 0.5f + 33f, 18, 42, 42); // right of the pause button
             bool hover = r.Contains(Event.current.mousePosition);
             MenuStyle.Box(r, hover ? 1f : MenuStyle.W50, 1f);
-            // chhota camera icon: body + lens
+            // small camera icon: body + lens
             MenuStyle.Box(new Rect(r.x + 9, r.y + 14, 24, 17), MenuStyle.W80, 1f);
             MenuStyle.Box(new Rect(r.center.x - 4, r.y + 18, 8, 8), 1f, 1f, 4f);
-            // button ke neeche current view ka chhota label
-            string view = ControlSettings.View == CameraView.ThirdPerson ? "3RD PERSON" : "SIDE VIEW";
+            // the current view, under the button
+            string view = ControlSettings.View == CameraView.Follow ? "FOLLOW" : ControlSettings.View == CameraView.ThirdPerson ? "3RD PERSON" : "SIDE VIEW";
             MenuStyle.Text(new Rect(r.x - 30, r.yMax + 4, r.width + 60, 12), view, UIKit.Face.Heavy, 9, MenuStyle.W50, 0.2f, TextAnchor.UpperCenter);
             if (hover && Event.current.type == EventType.MouseDown)
             {
                 Event.current.Use();
-                sm.ChoosePauseItem(4); // pause menu ka "Camera" item (index 4)
+                StageManager.CycleCamera();
             }
         }
         void DrawHelp(float w, float h, StageManager sm)
@@ -672,7 +682,7 @@ namespace BorrowGravity
             y += 30f;
             float kx = lx;
             var keyHints = GameFlow.Solo
-                ? new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "gravity"), (new[] { "Q" }, "freeze"), (new[] { "Mouse" }, "look") }
+                ? new[] { (new[] { "WASD", "Arrows" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "gravity"), (new[] { "Q" }, "freeze"), (new[] { "Mouse" }, "look") }
                 : new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "power"), (new[] { "Mouse" }, "look") };
             foreach (var (keys, label) in keyHints)
             {
@@ -746,18 +756,21 @@ namespace BorrowGravity
                 MenuStyle.ShadowAlpha = 0.35f;
                 return;
             }
-            MenuStyle.Text(new Rect(0, h * 0.2f, w, 50f), "PAUSED", UIKit.Face.Display, 40, 1f, 0.3f);
+            // compact list, centred on the screen
+            const float rowW = 340f, rowH = 44f, step = 52f;
+            float top = h * 0.5f - (StageManager.PauseItems.Length * step) * 0.5f + 20f;
+            MenuStyle.Text(new Rect(0, top - 60f, w, 40f), "PAUSED", UIKit.Face.Display, 32, 1f, 0.3f);
             for (int i = 0; i < StageManager.PauseItems.Length; i++)
             {
-                var r = new Rect(w * 0.5f - 210, h * 0.33f + i * 58, 420, 48);
+                var r = new Rect(w * 0.5f - rowW * 0.5f, top + i * step, rowW, rowH);
                 bool active = sm.PauseSelection == i, hover = r.Contains(Event.current.mousePosition);
                 MenuStyle.Box(r, active ? MenuStyle.W50 : hover ? MenuStyle.W25 : MenuStyle.W12, 1f);
                 if (active) MenuStyle.Brackets(r);
                 MenuStyle.Text(r, StageManager.PauseLabel(i).ToUpperInvariant(), UIKit.Face.Heavy, 15, 1f, 0.22f);
                 if (hover && Event.current.type == EventType.MouseDown) { Event.current.Use(); sm.PauseSelection = i; sm.ChoosePauseItem(i); }
             }
-            MenuStyle.Text(new Rect(0, h * 0.33f + StageManager.PauseItems.Length * 58 + 14, w, 18), "W / S choose  ·  Space / Enter confirm  ·  Esc resume",
-                UIKit.Face.Body, 13, MenuStyle.W50);
+            MenuStyle.Text(new Rect(0, top + StageManager.PauseItems.Length * step + 8f, w, 16), "W / S choose  ·  Space / Enter confirm  ·  Esc resume",
+                UIKit.Face.Body, 12, MenuStyle.W50);
             MenuStyle.ShadowAlpha = 0.35f;
         }
 

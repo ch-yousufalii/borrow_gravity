@@ -21,3 +21,10 @@
 *.aab
 *.unitypackage
 *_BurstDebugInformation_DoNotShip/
+
+# Build outputs (never commit)
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+windows build/
+*.zip
+*.exe
+mono_crash.*

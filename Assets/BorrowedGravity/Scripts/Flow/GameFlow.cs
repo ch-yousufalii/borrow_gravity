@@ -14,23 +14,23 @@ namespace BorrowGravity
         public const string GameScene = "Game";
         public const string IntroScene = "Intro";
         public const string OutroScene = "Outro";
-        public static readonly string[] StageScenes = { "Stage1", "Stage2", "Stage3" };
+        public static readonly string[] StageScenes = { "Stage1", "Stage2", "Stage3", "Stage4" };
         const string UnlockKey = "bg_unlocked_stage";
 
         /// <summary>True when a stage was entered from the menu or a previous stage (shows the story intro).</summary>
         public static bool ShowIntro = true;
 
-        /// <summary>The level the Game scene shows when it (re)loads: 0 intro, 1-3 stages, 4 ending.</summary>
+        /// <summary>The level the Game scene shows when it (re)loads: 0 intro, 1-4 stages, 5 ending.</summary>
         public static int PendingStage = 1;
 
-        public const int MaxPlayers = 4;
+        public const int MaxPlayers = 2;
 
-        /// <summary>How many astronauts play (1-4): chosen by whoever starts the game / hosts the room.</summary>
+        /// <summary>How many astronauts play (1-2): chosen by whoever starts the game / hosts the room.</summary>
         public static int PlayerCount = 2;
 
         public static bool Solo => PlayerCount <= 1;
 
-        /// <summary>A and C bend gravity, B and D nullify; a solo player has both powers.</summary>
+        /// <summary>A bends gravity and B nullifies; a solo player has both powers.</summary>
         public static bool HasGravity(int playerIndex) => Solo || playerIndex % 2 == 0;
         public static bool HasNullify(int playerIndex) => Solo || playerIndex % 2 == 1;
 
@@ -44,7 +44,8 @@ namespace BorrowGravity
             PlayerCount = 2;
         }
 
-        /// <summary>Phones default to 30 fps and dim the screen while you only touch it: run at 60 and stay awake.</summary>
+        /// <summary>Phones default to 30 fps and dim the screen while you only touch it: run at 60 (30 on low-end phones,
+        /// see <see cref="PerformanceGuard"/>) and stay awake.</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void MobileSetup()
         {
