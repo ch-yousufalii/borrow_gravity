@@ -2,7 +2,8 @@ using UnityEngine;
 
 namespace BorrowGravity
 {
-    /// <summary>Procedural walk cycle for the space-suit model: arms and legs swing with how fast the body moves.</summary>
+    /// <summary>Procedural walk cycle for the space-suit model: arms and legs swing with how fast the body moves on its
+    /// own, so riding a swing or lift doesn't look like walking.</summary>
     public class SuitAnimator : MonoBehaviour
     {
         public Transform leftArm, rightArm, leftLeg, rightLeg;
@@ -28,6 +29,13 @@ namespace BorrowGravity
             Vector3 v = (transform.position - lastPos) / dt;
             lastPos = transform.position;
             float speed = Vector3.ProjectOnPlane(v, transform.up).magnitude;
+            if (player != null)
+            {
+                bool walking = player.MoveDirection.sqrMagnitude > 0.01f;
+                if (NetSession.IsClient) { if (!player.RemoteWalking) speed = 0f; } // the host decides; a joining device sees no platform speed
+                else if (player.CarryVelocity.sqrMagnitude > 0.01f)
+                    speed = walking ? Vector3.ProjectOnPlane(v - player.CarryVelocity, transform.up).magnitude : 0f;
+            }
             amount = Mathf.MoveTowards(amount, Mathf.Clamp01(speed / speedForFullSwing), dt * 4f);
             phase += dt * cadence * Mathf.Lerp(0.4f, 1f, amount);
             float s = Mathf.Sin(phase) * swing * amount;

@@ -327,7 +327,7 @@ namespace BorrowGravity
             for (int p = 0; p < 4; p++)
             {
                 var pc = Players.Get(p);
-                w.Write((byte)((pc != null && pc.IsPushing ? 1 : 0) | (pc != null && pc.IsCarrying ? 2 : 0)));
+                w.Write((byte)((pc != null && pc.IsPushing ? 1 : 0) | (pc != null && pc.IsCarrying ? 2 : 0) | (pc != null && pc.MoveDirection.sqrMagnitude > 0.01f ? 4 : 0)));
             }
             w.Write((byte)zones.Length);
             foreach (var z in zones)
@@ -418,7 +418,7 @@ namespace BorrowGravity
             for (int p = 0; p < 4; p++)
             {
                 byte f = r.ReadByte();
-                Players.Get(p)?.SetRemoteFlags((f & 1) != 0, (f & 2) != 0);
+                Players.Get(p)?.SetRemoteFlags((f & 1) != 0, (f & 2) != 0, (f & 4) != 0);
             }
             int zc = r.ReadByte();
             for (int z = 0; z < zc; z++)

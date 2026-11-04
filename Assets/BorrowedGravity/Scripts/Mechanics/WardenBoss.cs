@@ -4,14 +4,15 @@ namespace BorrowGravity
 {
     /// <summary>
     /// The Warden, Level 7's boss. It hunts the players with ground strikes and can only be hurt by both powers at once:
-    /// B freezes it, then A changes the arena's gravity while it is frozen. Three hits destroy it, each one making the
-    /// fight harder. Its death opens the exit and starts the escape countdown.
+    /// B freezes it, then A changes the arena's gravity while it is frozen. Three hits break it out of the arena, each one
+    /// making the fight harder. It isn't finished: it chases the team along the escape route under the countdown, then
+    /// makes a last stand on the ship deck, where two more hits destroy it and open the way to the ship.
     /// Damage survives a respawn, so a fall never undoes progress.
     /// </summary>
     [RequireComponent(typeof(Nullifiable))]
     public class WardenBoss : MonoBehaviour, IResettable
     {
-        enum Phase { Waiting, Fighting, Stunned, Dead }
+        enum Phase { Waiting, Fighting, Stunned, Chasing, Dead }
 
         public int section;
         public GravityZone arenaZone;
@@ -31,10 +32,22 @@ namespace BorrowGravity
         public float moveSpeed = 3.5f;
         public float stunSeconds = 3f;
         public float escapeSeconds = 35f;
+        public float chaseSpeed = 5f;
 
-        static readonly float[] StrikeInterval = { 3f, 2.4f, 1.8f };
-        static readonly float[] Telegraph = { 1.3f, 1.1f, 0.9f };
-        const float TileInterval = 4f;
+        [Header("Last stand on the ship deck")]
+        [Tooltip("Gravity zone over the ship deck. Empty = the Warden simply dies after the arena fight.")]
+        public GravityZone lastStandZone;
+        [Tooltip("Force field in front of the ship, removed when the Warden is destroyed.")]
+        public GameObject lastStandBarrier;
+        public Vector3 lastStandCenter;
+        [Tooltip("The last stand starts when a player gets past this x.")]
+        public float lastStandStartX = 90f;
+        public int lastStandHits = 2;
+
+        static readonly float[] StrikeInterval = { 2.6f, 2.1f, 1.6f };
+        static readonly float[] Telegraph = { 1.2f, 1f, 0.85f };
+        const float TileInterval = 3f;
+        const float ChaseStrikeInterval = 2.2f;
 
         public int Section => section;
         public int Hits { get; private set; }
@@ -44,7 +57,11 @@ namespace BorrowGravity
         Nullifiable shell;
         Rigidbody body;
         float nextStrike, nextTile, stunEnd, escapeLeft, deathFall = -1f;
-        bool wasFrozen, countdownOn;
+        bool wasFrozen, countdownOn, lastStand;
+        int stageHits;
+
+        GravityZone CurrentZone => lastStand ? lastStandZone : arenaZone;
+        int HitsNeeded => lastStand ? Mathf.Min(lastStandHits, healthLights.Length) : healthLights.Length;
 
         void Awake()
         {
@@ -55,8 +72,17 @@ namespace BorrowGravity
             if (sweepArm != null) sweepArm.SetActive(false);
         }
 
-        void OnEnable() { if (arenaZone != null) arenaZone.Changed += OnGravityChanged; }
-        void OnDisable() { if (arenaZone != null) arenaZone.Changed -= OnGravityChanged; }
+        void OnEnable()
+        {
+            if (arenaZone != null) arenaZone.Changed += OnGravityChanged;
+            if (lastStandZone != null) lastStandZone.Changed += OnGravityChanged;
+        }
+
+        void OnDisable()
+        {
+            if (arenaZone != null) arenaZone.Changed -= OnGravityChanged;
+            if (lastStandZone != null) lastStandZone.Changed -= OnGravityChanged;
+        }
 
         int Tier => Mathf.Clamp(Hits, 0, StrikeInterval.Length - 1);
 
@@ -96,7 +122,7 @@ namespace BorrowGravity
                     }
                     wasFrozen = false;
                     if (Time.time >= nextStrike) Attack();
-                    if (Hits >= 2 && Time.time >= nextTile) DropTile();
+                    if (!lastStand && Hits >= 2 && Time.time >= nextTile) DropTile();
                     break;
 
                 case Phase.Stunned:
@@ -109,8 +135,16 @@ namespace BorrowGravity
                     }
                     break;
 
-                case Phase.Dead:
+                case Phase.Chasing:
                     UpdateEscape(sm);
+                    if (phase != Phase.Chasing) break;
+                    if (Time.time >= nextStrike) { nextStrike = Time.time + ChaseStrikeInterval; StrikePlayers(Telegraph[1], false); }
+                    foreach (var p in Players.All)
+                        if (p != null && p.transform.position.x >= lastStandStartX) { BeginLastStand(); break; }
+                    break;
+
+                case Phase.Dead:
+                    if (lastStandZone == null) UpdateEscape(sm);
                     break;
             }
         }
@@ -131,10 +165,12 @@ namespace BorrowGravity
             else
             {
                 var p = Nearest();
-                Vector3 goal = p != null && phase == Phase.Fighting ? p.transform.position : arenaCenter;
-                target = new Vector3(goal.x, arenaCenter.y + hoverHeight + Mathf.Sin(Time.time * 1.4f) * 0.4f, goal.z);
+                Vector3 goal = p != null && (phase == Phase.Fighting || phase == Phase.Chasing) ? p.transform.position : arenaCenter;
+                float baseY = phase == Phase.Chasing && p != null ? p.transform.position.y - 1f : arenaCenter.y;
+                target = new Vector3(goal.x, baseY + hoverHeight + Mathf.Sin(Time.time * 1.4f) * 0.4f, goal.z);
             }
-            float speed = phase == Phase.Stunned ? 14f : moveSpeed + Hits;
+            float speed = phase == Phase.Stunned ? 14f : phase == Phase.Chasing ? chaseSpeed : moveSpeed + stageHits + (lastStand ? 2f : 0f);
+            if (lastStand && (target - body.position).sqrMagnitude > 144f) speed = 14f; // left behind on the route: catch up fast
             body.MovePosition(Vector3.MoveTowards(body.position, target, speed * Time.fixedDeltaTime));
         }
 
@@ -154,15 +190,30 @@ namespace BorrowGravity
         void Attack()
         {
             nextStrike = Time.time + StrikeInterval[Tier];
+            StrikePlayers(Telegraph[Tier], Hits >= 1);
+        }
+
+        /// <summary>A strike under each player; once hurt, a second one where they're running to.</summary>
+        void StrikePlayers(float telegraph, bool lead)
+        {
             foreach (var p in Players.All)
             {
-                if (p == null || p.transform.position.x > arenaCenter.x + 21f) continue;
-                foreach (var s in strikes)
-                {
-                    if (s == null || s.Busy) continue;
-                    s.Fire(new Vector3(p.transform.position.x, arenaCenter.y + 0.05f, p.transform.position.z), Telegraph[Tier]);
-                    break;
-                }
+                if (p == null || (phase == Phase.Fighting && !lastStand && p.transform.position.x > arenaCenter.x + 21f)) continue;
+                FireAt(p.transform.position, telegraph);
+                if (lead && p.MoveDirection.sqrMagnitude > 0.01f)
+                    FireAt(p.transform.position + p.MoveDirection * p.moveSpeed * telegraph, telegraph);
+            }
+        }
+
+        void FireAt(Vector3 at, float telegraph)
+        {
+            // land on whatever is under that spot (nothing there = no strike)
+            if (!Physics.Raycast(at + Vector3.up * 0.5f, Vector3.down, out var hit, 14f, ~0, QueryTriggerInteraction.Ignore)) return;
+            foreach (var s in strikes)
+            {
+                if (s == null || s.Busy) continue;
+                s.Fire(new Vector3(at.x, hit.point.y + 0.05f, at.z), telegraph);
+                return;
             }
         }
 
@@ -176,24 +227,68 @@ namespace BorrowGravity
 
         void OnGravityChanged(GravityZone z)
         {
-            if (phase != Phase.Fighting || !shell.IsActive) return;
+            if (phase != Phase.Fighting || !shell.IsActive || z != CurrentZone) return;
             Hits++;
-            if (healthLights != null && Hits <= healthLights.Length && healthLights[Hits - 1] != null)
-                healthLights[Hits - 1].SetActive(false);
+            stageHits++;
+            if (healthLights != null && stageHits <= healthLights.Length && healthLights[stageHits - 1] != null)
+                healthLights[stageHits - 1].SetActive(false);
             shell.ForceRelease(false);
             shell.enabled = false; // can't be frozen again until it recovers
             foreach (var s in strikes) if (s != null) s.Clear();
             Sfx.Play(SfxId.Boom, 1f);
             CoopCamera.Shake(0.8f, 0.8f);
-            if (healthLights != null && Hits >= healthLights.Length) { Die(); return; }
+            if (healthLights != null && stageHits >= HitsNeeded)
+            {
+                if (!lastStand && lastStandZone != null) BeginChase();
+                else Die();
+                return;
+            }
             phase = Phase.Stunned;
             stunEnd = Time.time + stunSeconds;
-            if (Hits == 1)
+            if (lastStand) GameUI.ShowWarning(HudHazard.General, "ONE MORE! Finish it!", 0f, 3f);
+            else if (Hits == 1)
             {
                 if (sweepArm != null) sweepArm.SetActive(true);
                 GameUI.ShowWarning(HudHazard.Electric, "HIT! Now jump its sweeping beam", 0f, 3f);
             }
             else GameUI.ShowWarning(HudHazard.BridgeCrack, "ONE MORE! The floor is failing", 0f, 3f);
+        }
+
+        /// <summary>Knocked out of the arena, but still flying: the exit opens and it hunts the team along the route.</summary>
+        void BeginChase()
+        {
+            phase = Phase.Chasing;
+            nextStrike = Time.time + 2.5f;
+            if (sweepArm != null) sweepArm.SetActive(false);
+            if (exitBarrier != null) exitBarrier.SetActive(false);
+            if (arenaZone != null) arenaZone.SetMode(GravityMode.Down, false);
+            GameUI.ShowWarning(HudHazard.General, "IT'S STILL COMING — RUN FOR THE SHIP!", 0f, 4f);
+            Sfx.Play(SfxId.Riser, 1f);
+            Sfx.SetLoop(LoopId.Alarm, true, 0.5f);
+            escapeLeft = escapeSeconds;
+            StartCountdown();
+        }
+
+        /// <summary>The Warden gets in front of the ship: same trick as before, two more hits, and no timer to rush it.</summary>
+        void BeginLastStand()
+        {
+            lastStand = true;
+            stageHits = 0;
+            arenaCenter = lastStandCenter;
+            for (int i = 0; i < healthLights.Length; i++)
+                if (healthLights[i] != null) healthLights[i].SetActive(i < HitsNeeded);
+            foreach (var s in strikes) if (s != null) s.Clear();
+            countdownOn = false;
+            GameUI.StopCountdown();
+            Sfx.SetLoop(LoopId.Alarm, false);
+            phase = Phase.Fighting;
+            shell.enabled = true;
+            wasFrozen = false;
+            nextStrike = Time.time + 2.5f;
+            GameUI.ShowWarning(HudHazard.General, "LAST STAND — TWO MORE HITS", 0f, 4f);
+            GameUI.ShowHint("B: freeze the Warden.  A: change gravity while it's frozen.", 6f);
+            Sfx.Play(SfxId.Boom, 0.9f);
+            CoopCamera.Shake(0.6f, 0.8f);
         }
 
         void Die()
@@ -202,7 +297,15 @@ namespace BorrowGravity
             deathFall = 0f;
             if (sweepArm != null) sweepArm.SetActive(false);
             if (exitBarrier != null) exitBarrier.SetActive(false);
+            if (lastStandBarrier != null) lastStandBarrier.SetActive(false);
             if (arenaZone != null) arenaZone.SetMode(GravityMode.Down, false);
+            if (lastStandZone != null)
+            {
+                lastStandZone.SetMode(GravityMode.Down, false);
+                GameUI.ShowWarning(HudHazard.General, "THE WARDEN IS DESTROYED — GET TO THE SHIP!", 0f, 4f);
+                Sfx.Play(SfxId.Riser, 1f);
+                return;
+            }
             GameUI.ShowWarning(HudHazard.General, "THE WARDEN IS DOWN — RUN FOR THE SHIP!", 0f, 4f);
             Sfx.Play(SfxId.Riser, 1f);
             Sfx.SetLoop(LoopId.Alarm, true, 0.5f);
@@ -231,13 +334,13 @@ namespace BorrowGravity
         public void ResetState()
         {
             foreach (var s in strikes) if (s != null) s.Clear();
-            if (phase == Phase.Dead)
+            if (phase == Phase.Dead || phase == Phase.Chasing)
             {
                 escapeLeft = escapeSeconds;
                 countdownOn = false;
                 return;
             }
-            // damage is kept; the Warden just goes back to the middle of the arena and waits for the team
+            // damage is kept; the Warden just goes back to the middle of its arena and waits for the team
             shell.enabled = true;
             shell.ForceRelease(false);
             wasFrozen = false;

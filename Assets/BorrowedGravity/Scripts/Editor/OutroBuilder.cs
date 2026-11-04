@@ -10,6 +10,7 @@ namespace BorrowGravity.EditorTools
     /// <summary>
     /// Builds the ending cinematic (Assets/Scenes/Outro.unity) on the Stage 3 layout: A and B carry the new engine to
     /// the ship, slide it into the bay, the engine comes alive, they climb aboard and the ship takes off.
+    /// The Game scene's copy is then moved to Level 7's ship deck by <see cref="OutroLevel7"/>: run that after rebuilding.
     /// </summary>
     public static class OutroBuilder
     {
