@@ -46,6 +46,8 @@ namespace BorrowGravity
         Collider platformCollider;
         Quaternion baseLocalRotation;
         Vector3 lastPosition;
+        Nullifiable freeze;
+        float clock;
         readonly HashSet<PlayerController> riders = new HashSet<PlayerController>();
 
         void Awake()
@@ -59,7 +61,9 @@ namespace BorrowGravity
             body.isKinematic = true;
             body.useGravity = false;
             body.interpolation = RigidbodyInterpolation.Interpolate;
-            Pose(Time.fixedTime, out var p, out var r);
+            freeze = platform.GetComponent<Nullifiable>();
+            clock = Time.fixedTime;
+            Pose(clock, out var p, out var r);
             platform.SetPositionAndRotation(p, r);
             body.position = p;
             body.rotation = r;
@@ -80,7 +84,10 @@ namespace BorrowGravity
         {
             // find who is standing on the platform BEFORE it moves, then move them by exactly the platform's movement
             CollectRiders();
-            Pose(Time.fixedTime + Time.fixedDeltaTime, out var pos, out var rot);
+            // a seat with a Nullifiable can be frozen by Player B: the swing holds still and picks up where it stopped
+            if (freeze != null && freeze.IsActive) return;
+            clock += Time.fixedDeltaTime;
+            Pose(clock, out var pos, out var rot);
             Vector3 delta = pos - body.position;
             body.MovePosition(pos);
             body.MoveRotation(rot);

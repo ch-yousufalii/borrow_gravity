@@ -33,6 +33,8 @@ namespace BorrowGravity
         Material sky;
         float progress = -1f;
 
+        void OnDisable() => CurrentLabel = ""; // the next level may not have a time of day
+
         void Start()
         {
             if (RenderSettings.skybox != null)

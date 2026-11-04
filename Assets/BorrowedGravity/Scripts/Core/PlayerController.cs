@@ -142,7 +142,7 @@ namespace BorrowGravity
         bool KeyboardDrives => !NetSession.Online || playerIndex == NetSession.LocalPlayer;
 
         /// <summary>Online each device has one player, so the other player's keys (arrows / R-Ctrl / R-Shift) work too;
-        /// solo, the one astronaut also moves with the arrows (Enter / R-Ctrl jump, R-Shift gravity).</summary>
+        /// solo, the one astronaut also moves with the arrows (Enter / R-Ctrl jump, R-Shift gravity, / freeze).</summary>
         PlayerKeys AltKeys => NetSession.Online
             ? (playerIndex == NetSession.LocalPlayer ? Players.Get(1 - playerIndex)?.keys : null)
             : (GameFlow.Solo && playerIndex == 0 ? SoloArrows : null);
@@ -150,7 +150,7 @@ namespace BorrowGravity
         static readonly PlayerKeys SoloArrows = new PlayerKeys
         {
             up = Key.UpArrow, down = Key.DownArrow, left = Key.LeftArrow, right = Key.RightArrow,
-            jump = Key.RightCtrl, jumpAlt = Key.Enter, power = Key.RightShift, power2 = Key.None
+            jump = Key.RightCtrl, jumpAlt = Key.Enter, power = Key.RightShift, power2 = Key.Slash
         };
 
         /// <summary>Joining phone: the host simulates this player; mirror its pose flags for the suit animation.</summary>
@@ -186,9 +186,9 @@ namespace BorrowGravity
         public bool PowerReleased() => (KeyboardDrives && keys.PowerReleased()) || (AltKeys?.PowerReleased() ?? false) || VirtualInput.PowerReleased(playerIndex);
 
         // second power button (solo play: nullify on Q / the second on-screen power button)
-        public bool Power2Pressed() => InputEnabled && ((KeyboardDrives && PlayerKeys.Pressed(keys.power2)) || VirtualInput.Power2Pressed(playerIndex));
-        public bool Power2Held() => InputEnabled && ((KeyboardDrives && PlayerKeys.Held(keys.power2)) || VirtualInput.Power2Held(playerIndex));
-        public bool Power2Released() => (KeyboardDrives && PlayerKeys.Released(keys.power2)) || VirtualInput.Power2Released(playerIndex);
+        public bool Power2Pressed() => InputEnabled && ((KeyboardDrives && PlayerKeys.Pressed(keys.power2)) || (AltKeys != null && PlayerKeys.Pressed(AltKeys.power2)) || VirtualInput.Power2Pressed(playerIndex));
+        public bool Power2Held() => InputEnabled && ((KeyboardDrives && PlayerKeys.Held(keys.power2)) || (AltKeys != null && PlayerKeys.Held(AltKeys.power2)) || VirtualInput.Power2Held(playerIndex));
+        public bool Power2Released() => (KeyboardDrives && PlayerKeys.Released(keys.power2)) || (AltKeys != null && PlayerKeys.Released(AltKeys.power2)) || VirtualInput.Power2Released(playerIndex);
 
         /// <summary>The camera that shows this player (its own split-screen camera when there is one).</summary>
         public Camera ViewCamera { get; set; }
