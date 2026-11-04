@@ -32,6 +32,8 @@ namespace BorrowGravity
             ("3 · Collapsing Return", "Carry the engine home — fast.", 3),
             ("4 · Event Horizon", "Cross the eclipse before the light goes out.", 4),
             ("5 · Final Repair", "Every repair needs both powers at once.", 5),
+            ("6 · Ship Graveyard", "Ride the salvage cranes past the dead fleet.", 6),
+            ("7 · The Warden", "Bring down the thing that hunted you.", 7),
         };
         // 0 solo, 1 host a room for two players, 2 join
         static readonly (string name, string hint)[] Modes =
@@ -514,7 +516,7 @@ namespace BorrowGravity
             {
                 ("Move", new[] { "W", "A", "S", "D" }), ("Look", new[] { "Mouse" }), ("Jump", new[] { "Space" }), ("Freeze · hold: steer", new[] { "E" })
             });
-            MenuStyle.Text(new Rect(x, r.yMax - 84f, inner, 16f), "Solo: WASD or arrows move · E bends gravity · Q freezes.",
+            MenuStyle.Text(new Rect(x, r.yMax - 84f, inner, 16f), "Solo: WASD · E bends gravity · Q freezes.  Arrows · Right Shift · /",
                 UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
             MenuStyle.Text(new Rect(x, r.yMax - 64f, inner, 16f), "Phones: joystick · drag to look · JUMP · POWER     C: camera · Hold R: checkpoint · Esc: pause",
                 UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);

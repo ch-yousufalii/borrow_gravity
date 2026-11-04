@@ -11,6 +11,8 @@ namespace BorrowGravity
         public float offset;
 
         Rigidbody rb;
+        Nullifiable frozen;
+        float clock;
 
         void Awake()
         {
@@ -18,12 +20,16 @@ namespace BorrowGravity
             if (rb == null) rb = gameObject.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
+            frozen = GetComponent<Nullifiable>();
+            clock = Time.time;
         }
 
         void FixedUpdate()
         {
+            if (frozen != null && frozen.IsActive) return; // B holds it still; it carries on from here afterwards
+            clock += Time.fixedDeltaTime;
             float cycle = (travelTime + pause) * 2f;
-            float c = Mathf.Repeat(Time.time + offset, cycle);
+            float c = Mathf.Repeat(clock + offset, cycle);
             float k;
             if (c < pause) k = 0f;
             else if (c < pause + travelTime) k = (c - pause) / travelTime;

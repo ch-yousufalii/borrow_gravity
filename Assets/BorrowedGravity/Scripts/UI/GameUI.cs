@@ -664,7 +664,9 @@ namespace BorrowGravity
             "Flip the station, find the engine.",
             "Carry the engine home — fast.",
             "Cross the eclipse before the light goes out.",
-            "Every repair needs both powers at once."   // Stage 5
+            "Every repair needs both powers at once.",   // Stage 5
+            "Swing through the wrecks. Freeze a ride for your partner.",
+            "Freeze it. Flip gravity. Then run."
         };
 
         /// <summary>
@@ -704,7 +706,7 @@ namespace BorrowGravity
             y += 30f;
             float kx = lx;
             var keyHints = GameFlow.Solo
-                ? new[] { (new[] { "WASD", "Arrows" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "gravity"), (new[] { "Q" }, "freeze"), (new[] { "Mouse" }, "look") }
+                ? new[] { (new[] { "WASD", "Arrows" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E", "RShift" }, "gravity"), (new[] { "Q", "/" }, "freeze"), (new[] { "Mouse" }, "look") }
                 : new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "power"), (new[] { "Mouse" }, "look") };
             foreach (var (keys, label) in keyHints)
             {
@@ -746,6 +748,8 @@ namespace BorrowGravity
             ("GET BACK TO THE SHIP", "The station is falling apart. Carry the engine home before it's gone."),
             ("CROSS THE EVENT HORIZON", "The eclipse is bending gravity. Carry each other through before the light goes out."),
             ("REPAIR THE SHIP", "One bends gravity, the other freezes the machinery. Finish every repair together."),   // Stage 5
+            ("CROSS THE SHIP GRAVEYARD", "Ride the wreck cranes to the far dock. Something in here is awake."),
+            ("DESTROY THE WARDEN", "B freezes it, A flips gravity while it's frozen. Three hits, then run for the ship."),
         };
 
         void DrawMission(float w, float h, StageManager sm)
