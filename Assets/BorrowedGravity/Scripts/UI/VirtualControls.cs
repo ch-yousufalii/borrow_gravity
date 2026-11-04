@@ -6,7 +6,7 @@ namespace BorrowGravity
 {
     /// <summary>
     /// On-screen joystick + JUMP + POWER for each player on this device: its own player full screen online or solo
-    /// (solo adds a second power button, NULLIFY), A and B side by side on a shared screen.
+    /// (solo adds a second power button, FREEZE), A and B side by side on a shared screen.
     /// Works with multi-touch and the mouse; feeds <see cref="VirtualInput"/>. J toggles it.
     /// </summary>
     public class VirtualControls : MonoBehaviour
@@ -274,8 +274,8 @@ namespace BorrowGravity
                 }
                 MenuStyle.Text(new Rect(st.home.x - 70, st.home.y + SR + 6, 140, 14), "PLAYER " + GameFlow.Letter(p), UIKit.Face.Heavy, 9, MenuStyle.W50, 0.3f);
                 DrawButton(jumps[p], "JUMP");
-                DrawButton(powers[p], GameFlow.HasGravity(p) ? "GRAVITY" : "NULLIFY");
-                if (GameFlow.Solo) DrawButton(powers2[p], "NULLIFY");
+                DrawButton(powers[p], GameFlow.HasGravity(p) ? "GRAVITY" : "FREEZE");
+                if (GameFlow.Solo) DrawButton(powers2[p], "FREEZE");
             }
         }
 

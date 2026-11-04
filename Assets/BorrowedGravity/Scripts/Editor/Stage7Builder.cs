@@ -21,6 +21,7 @@ namespace BorrowGravity.EditorTools
             Build();
             LevelArt.InsertScene(7, "Level_Stage7", ScenePath);
             Level7LastStand.Apply();
+            Level7PartsHunt.Apply();
             Debug.Log("[Level7] The Warden built and connected as level 7.");
         }
 

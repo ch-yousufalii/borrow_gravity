@@ -33,7 +33,7 @@ namespace BorrowGravity
             ("4 · Event Horizon", "Cross the eclipse before the light goes out.", 4),
             ("5 · Final Repair", "Every repair needs both powers at once.", 5),
             ("6 · Ship Graveyard", "Ride the salvage cranes past the dead fleet.", 6),
-            ("7 · The Warden", "Bring down the thing that hunted you.", 7),
+            ("7 · The Warden", "Find the 10 engine parts. It will hunt you.", 7),
         };
         // 0 solo, 1 host a room for two players, 2 join
         static readonly (string name, string hint)[] Modes =
@@ -431,6 +431,7 @@ namespace BorrowGravity
 
         void DrawKeyHints(float x, float width, float cy)
         {
+            if (ControlWords.Touch) return; // no keyboard to hint at
             // measure the three groups, then centre them with 16px between
             float Group(float gx, string[] keys, string label, bool draw)
             {
@@ -497,7 +498,7 @@ namespace BorrowGravity
                 y += rowH + gap;
             }
             if (MenuStyle.Button(new Rect(r.xMax - 26f - 96f, r.yMax - 26f - 34f, 96f, 34f), "Back")) CloseOverlay();
-            MenuStyle.Text(new Rect(x, r.yMax - 26f - 34f, inner - 110f, 34f), "W / S choose  ·  Enter play  ·  Esc back", UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+            MenuStyle.Text(new Rect(x, r.yMax - 26f - 34f, inner - 110f, 34f), ControlWords.Touch ? "" : "W / S choose  ·  Enter play  ·  Esc back", UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
         }
 
         void DrawControls(float w, float h)
@@ -508,6 +509,24 @@ namespace BorrowGravity
             MenuStyle.Text(new Rect(x, y, inner, 22f), "CONTROLS", UIKit.Face.Display, 18, 1f, 0.3f, TextAnchor.UpperLeft);
             y += 22f + 16f;
             float colW = (inner - 16f) * 0.5f;
+            if (ControlWords.Touch)
+            {
+                string stick = ControlSettings.Movement == MoveStyle.Joystick ? "Joystick" : "Arrows";
+                DrawControlCol(new Rect(x, y, colW, 196f), "PLAYER A · HOST", new[]
+                {
+                    ("Move", new[] { stick }), ("Look", new[] { "Drag" }), ("Jump", new[] { "JUMP" }), ("Switch gravity", new[] { "GRAVITY" })
+                });
+                DrawControlCol(new Rect(x + colW + 16f, y, colW, 196f), "PLAYER B · JOINS", new[]
+                {
+                    ("Move", new[] { stick }), ("Look", new[] { "Drag" }), ("Jump", new[] { "JUMP" }), ("Freeze · hold: steer", new[] { "FREEZE" })
+                });
+                MenuStyle.Text(new Rect(x, r.yMax - 84f, inner, 16f), "Solo: GRAVITY and FREEZE are both on screen.",
+                    UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+                MenuStyle.Text(new Rect(x, r.yMax - 64f, inner, 16f), "Top of the screen: pause and camera buttons. Restart from checkpoint is in pause.",
+                    UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
+                if (MenuStyle.Button(new Rect(r.xMax - 26f - 96f, r.yMax - 26f - 34f, 96f, 34f), "Back", true)) CloseOverlay();
+                return;
+            }
             DrawControlCol(new Rect(x, y, colW, 196f), "PLAYER A · HOST", new[]
             {
                 ("Move", new[] { "W", "A", "S", "D" }), ("Look", new[] { "Mouse" }), ("Jump", new[] { "Space" }), ("Switch gravity", new[] { "E" })
@@ -518,7 +537,7 @@ namespace BorrowGravity
             });
             MenuStyle.Text(new Rect(x, r.yMax - 84f, inner, 16f), "Solo: WASD · E bends gravity · Q freezes.  Arrows · Right Shift · /",
                 UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
-            MenuStyle.Text(new Rect(x, r.yMax - 64f, inner, 16f), "Phones: joystick · drag to look · JUMP · POWER     C: camera · Hold R: checkpoint · Esc: pause",
+            MenuStyle.Text(new Rect(x, r.yMax - 64f, inner, 16f), "Phones: joystick · drag to look · JUMP · GRAVITY / FREEZE     C: camera · Hold R: checkpoint · Esc: pause",
                 UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
             if (MenuStyle.Button(new Rect(r.xMax - 26f - 96f, r.yMax - 26f - 34f, 96f, 34f), "Back", true)) CloseOverlay();
         }

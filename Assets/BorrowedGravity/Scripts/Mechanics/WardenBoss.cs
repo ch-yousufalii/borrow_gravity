@@ -33,6 +33,8 @@ namespace BorrowGravity
         public float stunSeconds = 3f;
         public float escapeSeconds = 35f;
         public float chaseSpeed = 5f;
+        [Tooltip("Countdown on the run to the ship. Off when the level is about hunting for parts instead.")]
+        public bool useEscapeTimer = true;
 
         [Header("Last stand on the ship deck")]
         [Tooltip("Gravity zone over the ship deck. Empty = the Warden simply dies after the arena fight.")]
@@ -136,7 +138,7 @@ namespace BorrowGravity
                     break;
 
                 case Phase.Chasing:
-                    UpdateEscape(sm);
+                    if (useEscapeTimer) UpdateEscape(sm);
                     if (phase != Phase.Chasing) break;
                     if (Time.time >= nextStrike) { nextStrike = Time.time + ChaseStrikeInterval; StrikePlayers(Telegraph[1], false); }
                     foreach (var p in Players.All)
@@ -262,11 +264,11 @@ namespace BorrowGravity
             if (sweepArm != null) sweepArm.SetActive(false);
             if (exitBarrier != null) exitBarrier.SetActive(false);
             if (arenaZone != null) arenaZone.SetMode(GravityMode.Down, false);
-            GameUI.ShowWarning(HudHazard.General, "IT'S STILL COMING — RUN FOR THE SHIP!", 0f, 4f);
+            GameUI.ShowWarning(HudHazard.General, useEscapeTimer ? "IT'S STILL COMING — RUN FOR THE SHIP!" : "THE WAY OUT IS OPEN — IT'S STILL COMING!", 0f, 4f);
             Sfx.Play(SfxId.Riser, 1f);
             Sfx.SetLoop(LoopId.Alarm, true, 0.5f);
             escapeLeft = escapeSeconds;
-            StartCountdown();
+            if (useEscapeTimer) StartCountdown();
         }
 
         /// <summary>The Warden gets in front of the ship: same trick as before, two more hits, and no timer to rush it.</summary>
@@ -302,7 +304,7 @@ namespace BorrowGravity
             if (lastStandZone != null)
             {
                 lastStandZone.SetMode(GravityMode.Down, false);
-                GameUI.ShowWarning(HudHazard.General, "THE WARDEN IS DESTROYED — GET TO THE SHIP!", 0f, 4f);
+                GameUI.ShowWarning(HudHazard.General, useEscapeTimer ? "THE WARDEN IS DESTROYED — GET TO THE SHIP!" : "THE WARDEN IS DESTROYED — THE FIELD IS DOWN!", 0f, 4f);
                 Sfx.Play(SfxId.Riser, 1f);
                 return;
             }
