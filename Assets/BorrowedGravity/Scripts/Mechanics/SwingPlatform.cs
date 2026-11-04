@@ -1,12 +1,11 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace BorrowGravity
 {
     /// <summary>
     /// A swing (jhoola): a platform that hangs from this object (the pivot) and swings back and forth like a pendulum.
-    /// Players standing on it are carried along, so they can wait for the swing, jump on, ride it and jump off
-    /// to the next ledge.
+    /// Players standing on it are carried by PlayerController's moving-platform carry (like any other moving platform),
+    /// so they can wait for the swing, jump on, ride it and jump off to the next ledge.
     ///
     /// Setup:
     ///   1. Put this script on an empty GameObject at the hanging point (the pivot, up in the air).
@@ -37,25 +36,18 @@ namespace BorrowGravity
         [Tooltip("Keep the platform flat like a real swing seat, instead of tilting with the rope.")]
         public bool keepLevel = true;
 
-        [Header("Carrying players")]
-        [Tooltip("Extra height above the platform surface where a player still counts as standing on it.")]
-        public float riderReach = 0.6f;
-
         float length;
         Rigidbody body;
-        Collider platformCollider;
         Quaternion baseLocalRotation;
         Vector3 lastPosition;
         Nullifiable freeze;
         float clock;
-        readonly HashSet<PlayerController> riders = new HashSet<PlayerController>();
 
         void Awake()
         {
             if (platform == null) { enabled = false; Debug.LogWarning("[SwingPlatform] no platform assigned on " + name); return; }
             length = Mathf.Max(0.5f, Vector3.Distance(transform.position, platform.position));
             baseLocalRotation = Quaternion.Inverse(transform.rotation) * platform.rotation;
-            platformCollider = platform.GetComponentInChildren<Collider>();
             body = platform.GetComponent<Rigidbody>();
             if (body == null) body = platform.gameObject.AddComponent<Rigidbody>();
             body.isKinematic = true;
@@ -82,16 +74,12 @@ namespace BorrowGravity
 
         void FixedUpdate()
         {
-            // find who is standing on the platform BEFORE it moves, then move them by exactly the platform's movement
-            CollectRiders();
             // a seat with a Nullifiable can be frozen by Player B: the swing holds still and picks up where it stopped
             if (freeze != null && freeze.IsActive) return;
             clock += Time.fixedDeltaTime;
             Pose(clock, out var pos, out var rot);
-            Vector3 delta = pos - body.position;
             body.MovePosition(pos);
             body.MoveRotation(rot);
-            foreach (var p in riders) Carry(p, delta);
         }
 
         void LateUpdate()
@@ -113,30 +101,6 @@ namespace BorrowGravity
                 var s = ropeCube.localScale;
                 ropeCube.localScale = new Vector3(s.x, s.y, d.magnitude);
             }
-        }
-
-        void CollectRiders()
-        {
-            riders.Clear();
-            if (platformCollider == null) return;
-            var b = platformCollider.bounds;
-            var center = new Vector3(b.center.x, b.max.y + riderReach * 0.5f, b.center.z);
-            var half = new Vector3(b.extents.x, riderReach * 0.5f + 0.05f, b.extents.z);
-            foreach (var hit in Physics.OverlapBox(center, half, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore))
-            {
-                var pc = hit.GetComponentInParent<PlayerController>();
-                if (pc != null) riders.Add(pc);
-            }
-        }
-
-        static void Carry(PlayerController p, Vector3 delta)
-        {
-            if (delta == Vector3.zero) return;
-            var cc = p.GetComponent<CharacterController>();
-            if (cc != null && cc.enabled) { cc.Move(delta); return; }
-            var rb = p.GetComponent<Rigidbody>();
-            if (rb != null && !rb.isKinematic) { rb.position += delta; return; }
-            p.transform.position += delta;
         }
 
         void OnDrawGizmosSelected()

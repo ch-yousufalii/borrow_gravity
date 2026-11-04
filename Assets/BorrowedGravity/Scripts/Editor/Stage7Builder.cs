@@ -20,6 +20,7 @@ namespace BorrowGravity.EditorTools
         {
             Build();
             LevelArt.InsertScene(7, "Level_Stage7", ScenePath);
+            Level7LastStand.Apply();
             Debug.Log("[Level7] The Warden built and connected as level 7.");
         }
 
@@ -74,7 +75,7 @@ namespace BorrowGravity.EditorTools
             CoreObjects(ctx, 7, "STAGE 7 — THE WARDEN", HudObjective.ReturnToShip, "Destroy the Warden",
                 "Your ship is just past this platform, the engine is in your hands, and the graveyard's old security machine has you cornered.\n\n" +
                 "Nothing you have can scratch it, unless you strike together. B freezes it. A changes gravity while it's frozen, and the shift tears at its frame.\n\nThree hits. Then run.",
-                "YOU MADE IT", "The Warden is scrap, the engine is back in the ship, and it's time to go home.",
+                "YOU MADE IT", "The Warden is scrap and the ship is right there. Fit the engine, and it's time to go home.",
                 -25f, final: true);
             Save(ctx, ScenePath);
         }

@@ -97,6 +97,10 @@ namespace BorrowGravity
         /// <summary>Movement multiplier while carrying (1 = free).</summary>
         public float CarryLoad { get; set; } = 1f;
         public bool CanBeHurt => Time.time >= invulnerableUntil;
+        /// <summary>The speed of the moving platform under this player (zero on still ground or in the air).</summary>
+        public Vector3 CarryVelocity { get; private set; }
+        /// <summary>Joining device: whether the host says this player is walking on their own (see SetRemoteFlags).</summary>
+        public bool RemoteWalking { get; private set; }
         public float LastRespawnTime { get; private set; } = -10f;
         public event Action<PlayerController> Respawned;
 
@@ -154,8 +158,9 @@ namespace BorrowGravity
         };
 
         /// <summary>Joining phone: the host simulates this player; mirror its pose flags for the suit animation.</summary>
-        public void SetRemoteFlags(bool pushing, bool carrying)
+        public void SetRemoteFlags(bool pushing, bool carrying, bool walking)
         {
+            RemoteWalking = walking;
             if (pushing) lastPushTime = Time.time;
             if (carrying) CarryingUntil = Time.time + 0.3f;
         }
@@ -228,6 +233,7 @@ namespace BorrowGravity
             CheckGround(up);
             if (IsGrounded) { lastGroundedTime = Time.time; airJumpsLeft = airJumps; }
             Vector3 carry = ComputeCarry();
+            CarryVelocity = carry;
 
             GetMoveAxes(up, out var right, out var fwd);
             Vector2 input = MovementLocked || Time.time < stunnedUntil ? Vector2.zero : RawMove;
