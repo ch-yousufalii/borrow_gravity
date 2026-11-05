@@ -35,6 +35,7 @@ namespace BorrowGravity
             renderers = GetComponentsInChildren<Renderer>(true);
             transform.position += Vector3.up * lift;
             if (GameFlow.Solo && body != null) body.text = ForSolo(body.text);
+            if (ControlWords.Touch && body != null) body.text = ControlWords.Board(body.text);
             // render the glyphs at a higher font size and shrink them back: same layout, much crisper text
             foreach (var tm in new[] { title, body })
             {
@@ -100,7 +101,7 @@ namespace BorrowGravity
             ("then run together", "then run"), ("move together", "move on"),
         };
 
-        static string ForSolo(string text)
+        public static string ForSolo(string text)
         {
             foreach (var (from, to) in SoloWords) text = text.Replace(from, to);
             return text;

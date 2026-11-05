@@ -154,6 +154,7 @@ namespace BorrowGravity
             // (the pause / camera buttons are on the right edge now, so the column starts near the top)
             slot = 20f;
             DrawObjective(w, sm);
+            if (((NetSession.IsClient ? NetHud.partsMask : PartsMask()) & HuntFlag) != 0) DrawParts(w);
             DrawEngine(w, h);
             DrawMessages(w, h);
             DrawWarning(w);
@@ -317,7 +318,7 @@ namespace BorrowGravity
             if (g && n)
             {
                 var zone = gp.Target;
-                info.role = "GRAVITY + NULLIFY";
+                info.role = "GRAVITY + FREEZE";
                 info.fill = 1f - gp.CooldownFraction;
                 info.line1 = zone != null ? "E  " + ModeLabel(zone.Mode) : "E  NO ZONE NEARBY";
                 info.line2 = "Q  " + nullLine.ToLowerInvariant();
@@ -358,7 +359,7 @@ namespace BorrowGravity
                 if (string.IsNullOrEmpty(info.role)) continue;
                 bool right = n == 1;
                 var rect = right ? new Rect(w - 18f - 320f, 16f, 320f, 104f) : new Rect(18f, 16f, 320f, 104f);
-                PowerPanel(rect, GameFlow.Letter(i), info.role, info.fill, info.active, info.line1, info.line2, right);
+                PowerPanel(rect, GameFlow.Letter(i), info.role, info.fill, info.active, ControlWords.PanelLine(info.line1), ControlWords.PanelLine(info.line2), right);
                 n++;
             }
         }
@@ -474,10 +475,22 @@ namespace BorrowGravity
         {
             int mask = NetSession.IsClient ? NetHud.partsMask : PartsMask();
             if (mask == 0) return;
-            bool right = NetSession.IsClient;
+            bool right = NetSession.IsClient && (mask & HuntFlag) == 0;
             var r = new Rect(right ? w - 18 - 320 : 18, 128, 320, 34);
             MenuStyle.Glass(r);
             MenuStyle.Box(r, MenuStyle.W25, 1f);
+            if ((mask & HuntFlag) != 0)
+            {
+                // Level 7's parts hunt: how many of the ten
+                int have = mask & 15;
+                MenuStyle.Text(new Rect(r.x + 14, r.y, 120, r.height), "ENGINE  " + have + " / 10", UIKit.Face.Heavy, 11, 1f, 0.2f, TextAnchor.MiddleLeft);
+                for (int i = 0; i < 10; i++)
+                {
+                    var pip = new Rect(r.x + 128 + i * 18, r.center.y - 5, 12, 10);
+                    if (i < have) MenuStyle.Box(pip, 1f, 0f, 2f); else MenuStyle.Box(pip, MenuStyle.W50, 1f, 2f);
+                }
+                return;
+            }
             MenuStyle.Text(new Rect(r.x + 14, r.y, 80, r.height), "ENGINE", UIKit.Face.Heavy, 10, MenuStyle.W50, 0.3f, TextAnchor.MiddleLeft);
             for (int p = 0; p < 2; p++)
             {
@@ -491,9 +504,13 @@ namespace BorrowGravity
             }
         }
 
-        /// <summary>Two bits per half (A low, B high): 0 none, 1 waiting, 2 held, 3 installed.</summary>
+        const int HuntFlag = 128;
+
+        /// <summary>Two bits per half (A low, B high): 0 none, 1 waiting, 2 held, 3 installed. In a parts hunt: the flag + the count.</summary>
         public static int PartsMask()
         {
+            var hunt = EnginePartHunt.Instance;
+            if (hunt != null) return HuntFlag | hunt.Collected;
             int mask = 0;
             foreach (var part in EnginePart.All)
             {
@@ -566,6 +583,7 @@ namespace BorrowGravity
                 UIKit.Fill(new Rect(rr.x + 4, rr.y + 4, (rr.width - 8) * sm.ResetHold / sm.holdToResetSeconds, rr.height - 8), MenuStyle.White(0.35f));
                 MenuStyle.Text(rr, "RESET TO CHECKPOINT", UIKit.Face.Heavy, 11, 1f, 0.25f);
             }
+            if (ControlWords.Touch) return; // the on-screen controls speak for themselves; no H key on a phone
             if (!showHelp)
             {
                 MenuStyle.Text(new Rect(16, h - 28, 400, 18), "H · show controls", UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.MiddleLeft);
@@ -705,7 +723,13 @@ namespace BorrowGravity
             }
             y += 30f;
             float kx = lx;
-            var keyHints = GameFlow.Solo
+            string stick = ControlSettings.Movement == MoveStyle.Joystick ? "Joystick" : "Arrows";
+            var keyHints = ControlWords.Touch
+                ? (GameFlow.Solo
+                    ? new[] { (new[] { stick }, "move"), (new[] { "JUMP" }, "jump"), (new[] { "GRAVITY" }, "gravity"), (new[] { "FREEZE" }, "freeze"), (new[] { "Drag" }, "look") }
+                    : new[] { (new[] { stick }, "move"), (new[] { "JUMP" }, "jump"),
+                        (new[] { GameFlow.HasGravity(NetSession.Online ? NetSession.LocalPlayer : 0) ? "GRAVITY" : "FREEZE" }, "power"), (new[] { "Drag" }, "look") })
+                : GameFlow.Solo
                 ? new[] { (new[] { "WASD", "Arrows" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E", "RShift" }, "gravity"), (new[] { "Q", "/" }, "freeze"), (new[] { "Mouse" }, "look") }
                 : new[] { (new[] { "W", "A", "S", "D" }, "move"), (new[] { "Space" }, "jump"), (new[] { "E" }, "power"), (new[] { "Mouse" }, "look") };
             foreach (var (keys, label) in keyHints)
@@ -796,7 +820,7 @@ namespace BorrowGravity
                 MenuStyle.Text(r, StageManager.PauseLabel(i).ToUpperInvariant(), UIKit.Face.Heavy, 15, 1f, 0.22f);
                 if (hover && Event.current.type == EventType.MouseDown) { Event.current.Use(); sm.PauseSelection = i; sm.ChoosePauseItem(i); }
             }
-            MenuStyle.Text(new Rect(0, top + StageManager.PauseItems.Length * step + 8f, w, 16), "W / S choose  ·  Space / Enter confirm  ·  Esc resume",
+            MenuStyle.Text(new Rect(0, top + StageManager.PauseItems.Length * step + 8f, w, 16), ControlWords.Touch ? "Tap an option" : "W / S choose  ·  Space / Enter confirm  ·  Esc resume",
                 UIKit.Face.Body, 12, MenuStyle.W50);
             MenuStyle.ShadowAlpha = 0.35f;
         }
@@ -818,7 +842,7 @@ namespace BorrowGravity
             string next = last ? "Heading home" : "Next: Stage " + (sm.stageNumber + 1);
             float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 4f);
             MenuStyle.Text(new Rect(0, box.yMax + 30, w, 16), (next + (left > 0 ? "  in " + left + "…" : "…")).ToUpperInvariant(), UIKit.Face.Heavy, 13, pulse, 0.3f, TextAnchor.UpperCenter);
-            MenuStyle.Text(new Rect(0, box.yMax + 56, w, 14), "Tap or press Space to go now", UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
+            MenuStyle.Text(new Rect(0, box.yMax + 56, w, 14), ControlWords.Touch ? "Tap to go now" : "Tap or press Space to go now", UIKit.Face.Body, 12, MenuStyle.W50, 0f, TextAnchor.UpperCenter);
             MenuStyle.ShadowAlpha = 0.35f;
         }
     }
